@@ -19,6 +19,7 @@
 
 # Compiled Dynamic libraries
 *.so
+!libmyteams.so
 *.dylib
 *.dll
 *.so.*
@@ -67,7 +68,8 @@ Testing/
 .cache/
 
 # Project specific
-cpp_template
+myteams_server
+myteams_cli
 
 # Editor directories
 .vscode/

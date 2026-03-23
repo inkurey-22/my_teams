@@ -6,7 +6,7 @@
 ##
 
 BUILD_DIR = build
-TARGET = cpp_template
+TARGETS = myteams_server myteams_cli
 
 .PHONY: all clean fclean re debug
 
@@ -18,7 +18,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 fclean: clean
-	rm -f $(TARGET)
+	rm -f $(TARGETS)
 
 re: fclean all
 

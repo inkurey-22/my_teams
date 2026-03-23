@@ -8,6 +8,6 @@
 #include <iostream>
 
 int main() {
-    std::cout << "Hello, this is my base for C++ projects!" << std::endl;
+    std::cout << "Client" << std::endl;
     return 0;
 }
