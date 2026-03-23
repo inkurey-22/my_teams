@@ -1,27 +1,31 @@
 ##
 ## EPITECH PROJECT, 2026
-## cpp_template
+## my_teams
 ## File description:
 ## Makefile
 ##
 
-BUILD_DIR = build
+TARGET_DIR = target
 TARGETS = myteams_server myteams_cli
+RELEASE_DIR = $(TARGET_DIR)/release
+DEBUG_DIR = $(TARGET_DIR)/debug
 
 .PHONY: all clean fclean re debug
 
 all:
-	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
-	cmake --build $(BUILD_DIR)
+	cargo build --release
+	cp $(RELEASE_DIR)/myteams_server .
+	cp $(RELEASE_DIR)/myteams_cli .
 
 clean:
-	rm -rf $(BUILD_DIR)
+	cargo clean
+	rm -f $(TARGETS)
 
 fclean: clean
-	rm -f $(TARGETS)
 
 re: fclean all
 
 debug:
-	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug
-	cmake --build $(BUILD_DIR)
+	cargo build
+	cp $(DEBUG_DIR)/myteams_server .
+	cp $(DEBUG_DIR)/myteams_cli .
