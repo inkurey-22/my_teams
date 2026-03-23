@@ -2,10 +2,12 @@
 
 ## Function of the standard
 
+This standard defines a communication protocol meant to be used over the Internet Protocol allowing users to send messages to each other or defined groups of users at once.
+
 blabla something about the function of the standard
 (server-client communication, command formats, etc.)
 
-### Definitions
+## Definitions
 
 ```Client``` - The entity that initiates communication with the server.  
 
@@ -13,94 +15,139 @@ blabla something about the function of the standard
 
 ```Server``` - The entity that processes commands sent by clients and sends responses back to them.  
 
+```Message``` - A piece of information sent from the server to the client or from the client to the server. It can contain data, commands, or responses.
+
+The following symbols are used in the message and command formats:  
+```<SP>``` : space character  
+```<CRLF>``` : Carriage Return + Line Feed sequence  
 
 ## Client-Server Communication Standards
 
+### Message format
+
+A message is a string of characters comprised of a header and a body. The header and body are separated by a separator (space). The message is terminated by a Carriage Return + Line Feed sequence.
+
+#### Message Header format
+
+The message header starts with a uppercase letter indicating the type of message being sent followed by a three characters numeric code.
+
+The list of message types is as follow:
+```C``` : a command sent from the client to the server.  
+```R``` : a response to a command, sent by the server to a client.  
+```I``` : an info sent by the server to the client.  
+
+The list of return codes is as follow:
+
+100 : command (client sent command to the server)
+200 : command ok
+401 : unauthorized (user not logged in)
+403 : forbidden (user is logged in but does not have permission to execute the command)
+404 : not found (command not found / resource not found)
+500 : internal server error
+501 : bad request
+502 : gateway timeout //maybe unused
+503 : service unavailable //maybe unused
+
+This section describes the return codes that the server sends to the client, it is heavily inspired by http.  
+
+here are examples of messages in different situations:
+```C100 HELP``` : client sent help command.  
+```R200 "help string"``` : server sent response to the client sent help command.  
+```I100 NEW_MESSAGE //blabla``` : server sent notification to the client.  
+
 ### Client sent commands to the server
 
-The client sends commands to the server using a specific format.
+Each command is initiated by a user written input in the CLI format and then translated in the NET format and sent to the server as a command message.  
+The client is to display the response message sent by the server.
 
 #### CLI format:
 The user can use the command line interface (CLI) to send commands to the server. The CLI format is designed for human readability and ease of use. Each command starts with a forward slash (/) followed by the command name and any necessary arguments.  
 The command name is case-insensitive, meaning that it can be written in uppercase, lowercase, or a mix of both.  
 Arguments are preceded by a space character, and the command must end with a newline character to indicate the end of the command.  
 If needs be, the user can also use quotation marks to enclose arguments that contain spaces.
+An argument preceded by a question mark (?) is optional, meaning that the command can be executed without providing that argument.
 
 #### NET format:
-The network (NET) format is the format used for communication between the client and the server. It is designed for efficient parsing and transmission over the network. Each command is represented as a single line of text, with the command name in uppercase followed by any necessary arguments. Arguments are preceded by a space character, and the command must end with a Carriage Return + Line Feed sequence (CRLF) to indicate the end of the command. The arguments are always separated by quotation marks. 
 
-The following symbols are used in the command formats:  
-```<SP>``` : space character  
-```<CRLF>``` : Carriage Return + Line Feed sequence  
-
+The network (NET) format is the format used for communication between the client and the server. It must respect the message format defined above.
+The body is comprised of the command string as uppercase then arguments each preceeded by a separator (space) if needs be. All arguments are enclosed in quotation marks.
 An argument preceded by a question mark (?) is optional, meaning that the command can be executed without providing that argument.
+
+#### commands:
 
 example dummy command:
 
 command_name : description of the command
-CLI ```/command_name <SP> [argument_1] <SP> ?[argument_2]```  
-NET ```COMMAND_NAME <SP> ["argument_1"] <SP> "[argument_2]" <CRLF>```  
-NET ```COMMAND_NAME <SP> ["argument_1"] <CRLF>```  
+CLI ```/command_name <SP> "[argument_1]" <SP> ?"[argument_2]"```  
+NET ```C100 <SP> COMMAND_NAME <SP> "[argument_1]" <SP> "[argument_2]" <CRLF>```  
+NET ```C100 <SP> COMMAND_NAME <SP> "[argument_1]" <CRLF>```  
+- 200 : command ok
+- 401 : unauthorized (user not logged in)
+- 403 : forbidden (user is logged in but does not have permission to execute the command)
+- 500 : internal server error
+- ect
 
-#### commands:
+list of commands:
 
 help : show help  
 CLI ```/help```  
-NET ```HELP <CRLF>```  
+NET ```C100 <SP> HELP <CRLF>``` 
+- 200 : command ok
+- 500 : internal server error
 
 login : set the user_name used by client  
-CLI ```/login ["user_name"]```  
-NET ```LOGIN <SP> ["user_name"] <CRLF>```  
+CLI ```/login "[user_name]"```  
+NET ```C100 <SP> LOGIN <SP> "[user_name]" <CRLF>```  
 
 logout : disconnect the client from the server  
 CLI ```/logout```  
-NET ```LOGOUT <CRLF>```  
+NET ```C100 <SP> LOGOUT <CRLF>```  
 
 users : list all users that exist on the domain  
 CLI ```/users```  
-NET ```USERS <CRLF>```  
+NET ```C100 <SP> USERS <CRLF>```  
 
 user : get details about a specific user  
-CLI ```/user ["user_uuid"]```  
-NET ```USER <SP> ["user_uuid"] <CRLF>```  
+CLI ```/user "[user_uuid]"```  
+NET ```C100 <SP> USER <SP> "[user_uuid]" <CRLF>```  
 
 send : send a message to a specific user  
-CLI ```/send ["user_uuid"] ["message_body"]```  
-NET ```SEND <SP> ["user_uuid"] <SP> ["message_body"] <CRLF>```  
+CLI ```/send "[user_uuid]" "[message_body]"```  
+NET ```C100 <SP> SEND <SP> "[user_uuid]" <SP> "[message_body]" <CRLF>```  
 
 messages : list all messages exchanged with a specific user  
-CLI ```/messages ["user_uuid"]```  
-NET ```MESSAGES <SP> ["user_uuid"] <CRLF>```  
+CLI ```/messages "[user_uuid]"```  
+NET ```C100 <SP> MESSAGES <SP> "[user_uuid]" <CRLF>```  
 
 subscribe : subscribe to the events of a team and its sub directories (enable reception of all events from a team)  
-CLI ```/subscribe ["team_uuid"]```  
-NET ```SUBSCRIBE <SP> ["team_uuid"] <CRLF>```  
+CLI ```/subscribe "[team_uuid]"```  
+NET ```C100 <SP> SUBSCRIBE <SP> "[team_uuid]" <CRLF>```  
 
 subscribed : list all subscribed teams or list all users subscribed to a team  
-CLI ```/subscribed ?["team_uuid"]```  
-NET ```SUBSCRIBED <SP> ["team_uuid"] <CRLF>```  
-NET ```SUBSCRIBED<CRLF>```  
+CLI ```/subscribed ?"[team_uuid]"```  
+NET ```C100 <SP> SUBSCRIBED <SP> "[team_uuid]" <CRLF>```  
+NET ```C100 <SP> SUBSCRIBED<CRLF>```  
 
 unsubscribe : unsubscribe from a team and its sub directories (disable reception of all events from a team)  
-CLI ```/unsubscribe ["team_uuid"]```  
-NET ```UNSUBSCRIBE <SP> ["team_uuid"] <CRLF>```  
+CLI ```/unsubscribe "[team_uuid]"```  
+NET ```C100 <SP> UNSUBSCRIBE <SP> "[team_uuid]" <CRLF>```  
 
 use : Sets the command context to a team/channel/thread  
-CLI ```/use ?["location_uuid"]```  
-NET ```USE <SP> ["location_uuid"] <CRLF>```  
-NET ```USE<CRLF>```  
+CLI ```/use ?"[location_uuid]"```  
+NET ```C100 <SP> USE <SP> "[location_uuid]" <CRLF>```  
+NET ```C100 <SP> USE<CRLF>```  
 
 create : based on the context, create the sub resource  
 CLI ```/create```  
-NET ```CREATE <CRLF>```  
+NET ```C100 <SP> CREATE <CRLF>```  
 
 list : based on the context, list all the sub resources  
 CLI ```/list```  
-NET ```LIST <SP> ["location_uuid"] <CRLF>```  
+NET ```C100 <SP> LIST <SP> "[location_uuid]" <CRLF>```  
 
 info : based on the context, display details of the current resource  
 CLI ```/info```  
-NET ```INFO <CRLF>```  
+NET ```C100 <SP> INFO <CRLF>```  
 
 ### Server sent data to the client
 
@@ -108,19 +155,9 @@ The server sends data to the client using a specific format.
 
 blabla something about the format of the data sent by the server  
 
-```NEW_MESSAGE <SP> ["message_uuid"] <SP> ["sender_uuid"] <SP> ["receiver_uuid"] <SP> ["message_body"] <CRLF>```  
+```I100 <SP> NEW_MESSAGE <SP> "[message_uuid]" <SP> "[sender_uuid]" <SP> "[receiver_uuid]" <SP> "[message_body]" <CRLF>```  
 
 BLABLA  
 
-## return codes
 
-This section describes the return codes that the server sends to the client, it is heavily inspired by http and if you don't find the use case in the followings, look for the http standard instead.  
 
-200 ok
-401 unauthorized
-403 forbidden
-404 not found (command not found / resource not found)
-500 internal server error
-501 bad request
-502 gateway timeout
-503 service unavailable
