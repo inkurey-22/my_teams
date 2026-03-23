@@ -34,10 +34,10 @@ An argument preceded by a question mark (?) is optional, meaning that the comman
 
 example dummy command:
 
-command_name : description of the command  
+command_name : description of the command
 CLI ```\command_name <SP> [argument_1] <SP> ?[argument_2]```  
-NET ```COMMAND_NAME <SP> "[argument_1]" <SP> "[argument_2]" <CRLF>```  
-NET ```COMMAND_NAME <SP> "[argument_1]"<CRLF>```  
+NET ```COMMAND_NAME <SP> ["argument_1"] <SP> "[argument_2]" <CRLF>```  
+NET ```COMMAND_NAME <SP> ["argument_1"] <CRLF>```  
 
 #### commands:
 
@@ -46,8 +46,8 @@ CLI ```/help```
 NET ```HELP <CRLF>```  
 
 login : set the user_name used by client  
-CLI ```/login "[user_name]"```  
-NET ```LOGIN <SP> "[user_name]" <CRLF>```  
+CLI ```/login ["user_name"]```  
+NET ```LOGIN <SP> ["user_name"] <CRLF>```  
 
 logout : disconnect the client from the server  
 CLI ```/logout```  
@@ -58,33 +58,33 @@ CLI ```/users```
 NET ```USERS <CRLF>```  
 
 user : get details about a specific user  
-CLI ```/user "[user_uuid]"```  
-NET ```USER <SP> "[user_uuid]" <CRLF>```  
+CLI ```/user ["user_uuid"]```  
+NET ```USER <SP> ["user_uuid"] <CRLF>```  
 
 send : send a message to a specific user  
-CLI ```/send "[user_uuid]" "[message_body]"```  
-NET ```SEND <SP> "[user_uuid]" <SP> "[message_body]" <CRLF>```  
+CLI ```/send ["user_uuid"] ["message_body"]```  
+NET ```SEND <SP> ["user_uuid"] <SP> ["message_body"] <CRLF>```  
 
 messages : list all messages exchanged with a specific user  
-CLI ```/messages "[user_uuid]"```  
-NET ```MESSAGES <SP> "[user_uuid]" <CRLF>```  
+CLI ```/messages ["user_uuid"]```  
+NET ```MESSAGES <SP> ["user_uuid"] <CRLF>```  
 
 subscribe : subscribe to the events of a team and its sub directories (enable reception of all events from a team)  
-CLI ```/subscribe "[team_uuid]"```  
-NET ```SUBSCRIBE <SP> "[team_uuid]" <CRLF>```  
+CLI ```/subscribe ["team_uuid"]```  
+NET ```SUBSCRIBE <SP> ["team_uuid"] <CRLF>```  
 
 subscribed : list all subscribed teams or list all users subscribed to a team  
-CLI ```/subscribed ?"[team_uuid]"```  
-NET ```SUBSCRIBED <SP> "[team_uuid]" <CRLF>```  
+CLI ```/subscribed ?["team_uuid"]```  
+NET ```SUBSCRIBED <SP> ["team_uuid"] <CRLF>```  
 NET ```SUBSCRIBED<CRLF>```  
 
 unsubscribe : unsubscribe from a team and its sub directories (disable reception of all events from a team)  
-CLI ```/unsubscribe "[team_uuid]"```  
-NET ```UNSUBSCRIBE <SP> "[team_uuid]" <CRLF>```  
+CLI ```/unsubscribe ["team_uuid"]```  
+NET ```UNSUBSCRIBE <SP> ["team_uuid"] <CRLF>```  
 
 use : Sets the command context to a team/channel/thread  
-CLI ```/use ?"[location_uuid]"```  
-NET ```USE <SP> "[location_uuid]" <CRLF>```  
+CLI ```/use ?["location_uuid"]```  
+NET ```USE <SP> ["location_uuid"] <CRLF>```  
 NET ```USE<CRLF>```  
 
 create : based on the context, create the sub resource  
@@ -93,7 +93,7 @@ NET ```CREATE <CRLF>```
 
 list : based on the context, list all the sub resources  
 CLI ```/list```  
-NET ```LIST <SP> "[location_uuid]" <CRLF>```  
+NET ```LIST <SP> ["location_uuid"] <CRLF>```  
 
 info : based on the context, display details of the current resource  
 CLI ```/info```  
@@ -105,6 +105,6 @@ The server sends data to the client using a specific format.
 
 blabla something about the format of the data sent by the server  
 
-```NEW_MESSAGE <SP> "[message_uuid]" <SP> "[sender_uuid]" <SP> "[receiver_uuid]" <SP> "[message_body]" <CRLF>```  
+```NEW_MESSAGE <SP> ["message_uuid"] <SP> ["sender_uuid"] <SP> ["receiver_uuid"] <SP> ["message_body"] <CRLF>```  
 
 BLABLA  
