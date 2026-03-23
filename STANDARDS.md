@@ -21,7 +21,10 @@ blabla something about the function of the standard
 The client sends commands to the server using a specific format.
 
 #### CLI format:
-The user can use the command line interface (CLI) to send commands to the server. The CLI format is designed for human readability and ease of use. Each command starts with a forward slash (/) followed by the command name and any necessary arguments. //The command name is case-insensitive, meaning that it can be written in uppercase, lowercase, or a mix of both.// Arguments are preceded by a space character//, and the command must end with a newline character to indicate the end of the command//. If needs be, the user can also use quotation marks to enclose arguments that contain spaces.
+The user can use the command line interface (CLI) to send commands to the server. The CLI format is designed for human readability and ease of use. Each command starts with a forward slash (/) followed by the command name and any necessary arguments.  
+The command name is case-insensitive, meaning that it can be written in uppercase, lowercase, or a mix of both.  
+Arguments are preceded by a space character, and the command must end with a newline character to indicate the end of the command.  
+If needs be, the user can also use quotation marks to enclose arguments that contain spaces.
 
 #### NET format:
 The network (NET) format is the format used for communication between the client and the server. It is designed for efficient parsing and transmission over the network. Each command is represented as a single line of text, with the command name in uppercase followed by any necessary arguments. Arguments are preceded by a space character, and the command must end with a Carriage Return + Line Feed sequence (CRLF) to indicate the end of the command. The arguments are always separated by quotation marks. 
@@ -35,7 +38,7 @@ An argument preceded by a question mark (?) is optional, meaning that the comman
 example dummy command:
 
 command_name : description of the command
-CLI ```\command_name <SP> [argument_1] <SP> ?[argument_2]```  
+CLI ```/command_name <SP> [argument_1] <SP> ?[argument_2]```  
 NET ```COMMAND_NAME <SP> ["argument_1"] <SP> "[argument_2]" <CRLF>```  
 NET ```COMMAND_NAME <SP> ["argument_1"] <CRLF>```  
 
