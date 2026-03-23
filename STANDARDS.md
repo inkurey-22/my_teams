@@ -111,3 +111,16 @@ blabla something about the format of the data sent by the server
 ```NEW_MESSAGE <SP> ["message_uuid"] <SP> ["sender_uuid"] <SP> ["receiver_uuid"] <SP> ["message_body"] <CRLF>```  
 
 BLABLA  
+
+## return codes
+
+This section describes the return codes that the server sends to the client, it is heavily inspired by http and if you don't find the use case in the followings, look for the http standard instead.  
+
+200 ok
+401 unauthorized
+403 forbidden
+404 not found (command not found / resource not found)
+500 internal server error
+501 bad request
+502 gateway timeout
+503 service unavailable
