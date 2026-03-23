@@ -1,6 +1,7 @@
 use std::env;
 use std::io::ErrorKind;
-use std::net::{Shutdown, TcpListener, TcpStream};
+use std::io::{BufRead, BufReader};
+use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
@@ -68,10 +69,27 @@ fn configure_listener(listener: &TcpListener) {
 
 fn handle_client(stream: TcpStream, peer: std::net::SocketAddr) {
     println!("Client connected: {}", peer);
-    if let Err(err) = stream.shutdown(Shutdown::Both) {
-        eprintln!("Failed to disconnect client {}: {}", peer, err);
-    } else {
-        println!("Client disconnected: {}", peer);
+
+    let mut reader = BufReader::new(stream);
+
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                println!("Client disconnected: {}", peer);
+                break;
+            }
+            Ok(_) => {
+                let command = line.trim_end_matches(['\r', '\n']);
+                if !command.is_empty() {
+                    println!("{} > {}", peer, command);
+                }
+            }
+            Err(err) => {
+                eprintln!("Client read error for {}: {}", peer, err);
+                break;
+            }
+        }
     }
 }
 
