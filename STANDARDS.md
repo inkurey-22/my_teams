@@ -73,7 +73,7 @@ An argument preceded by a question mark (?) is optional, meaning that the comman
 
 ### NET format:
 
-The network (NET) format is the format used for communication between the client and the server. It must respect the message format defined above.
+The network (NET) format is the format used for communication between the client and the server. It must respect the message header format defined above.
 The body is comprised of the command string as uppercase then arguments each preceeded by a separator (space) if needs be. All arguments are enclosed in quotation marks.
 An argument preceded by a question mark (?) is optional, meaning that the command can be executed without providing that argument.
 
@@ -154,6 +154,15 @@ The server sends response messages to the client in response to commands sent by
 
 ## Server sent data to the client
 
-The server must send non response messages to the client in the form of info messages. These messages are initiated by an event occurring on the server side, such as a new message being sent to a user or a change in the state of a resource. The info message header contains the character 'I' followed by a code indicating the type of information being sent and may also contain additional data or information related to the event in the body.
+The server must send non response messages to the client in the form of info messages. These messages are initiated by an event occurring on the server side, such as a new message being sent to a user or a change in the state of a resource. The info message header contains the character 'I' followed by a code indicating the type of information being sent and may also contain additional data or information related to the event in the body. These messages are sent in the NET format defined below.
 
-//TODO
+### NET format:
+
+The network (NET) format is the format used for communication between the server and the client. It must respect the message header format defined above.
+The body contains the information related to the event in the form of a string.
+
+### Info message types:
+
+NET```I100 NEW_MESSAGE <SP> "[message_body]" <CRLF>``` : a new message has been sent to the user.
+
+///ECT
