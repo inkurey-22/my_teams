@@ -30,7 +30,7 @@ fn tokenize_command(line: &str) -> Vec<String> {
 }
 
 pub fn write_raw_command(stream: &mut TcpStream, command: &str) -> io::Result<()> {
-    let payload = format!("{}\n", command);
+    let payload = format!("{}\r\n", command);
     stream.write_all(payload.as_bytes())
 }
 
