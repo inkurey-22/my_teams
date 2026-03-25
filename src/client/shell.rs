@@ -1,8 +1,11 @@
+use crate::commands::{command_registry, dispatch_slash_command, write_raw_command, ShellState};
 use std::io::{self, Write};
 use std::net::{Shutdown, TcpStream};
 
 pub fn run_shell(stream: &mut TcpStream) {
     let stdin = io::stdin();
+    let mut state = ShellState::default();
+    let registry = command_registry();
 
     println!("Type commands to send to the server. Use 'exit' or 'quit' to disconnect.");
 
@@ -26,10 +29,17 @@ pub fn run_shell(stream: &mut TcpStream) {
                     continue;
                 }
 
-                let payload = format!("{}\n", command);
-                if let Err(err) = stream.write_all(payload.as_bytes()) {
-                    eprintln!("failed to send command: {}", err);
-                    break;
+                match dispatch_slash_command(&mut state, &registry, stream, command) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        if let Err(err) = write_raw_command(stream, command) {
+                            eprintln!("failed to send command: {}", err);
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("command error: {}", err);
+                    }
                 }
             }
             Err(err) => {
