@@ -8,6 +8,10 @@ pub fn build_login_request(user_name: &str) -> String {
     format!("C100 LOGIN \"{}\"\r\n", quote_net_argument(user_name))
 }
 
+pub fn build_logout_request() -> String {
+    "C100 LOGOUT\r\n".to_string()
+}
+
 pub fn parse_response_code(response: &str) -> io::Result<u16> {
     let header = response
         .split_whitespace()

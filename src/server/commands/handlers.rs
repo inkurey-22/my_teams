@@ -106,7 +106,7 @@ pub fn handle_login(
 }
 
 pub fn handle_logout(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
@@ -115,7 +115,12 @@ pub fn handle_logout(
     if validate_arg_count(args, 0, 0).is_err() {
         return bad_request();
     }
-    not_found()
+
+    if let Some(user_uuid) = state.user_uuid.take() {
+        emit_user_logged_out(&user_uuid);
+    }
+
+    response(200, None)
 }
 
 pub fn handle_users(

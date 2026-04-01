@@ -2,7 +2,9 @@ use std::ffi::CString;
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 
-use crate::commands::protocol::{build_login_request, extract_uuid_from_body, parse_response_code};
+use crate::commands::protocol::{
+    build_login_request, build_logout_request, extract_uuid_from_body, parse_response_code,
+};
 use crate::commands::{CommandMap, ShellState};
 use crate::libcli;
 
@@ -94,13 +96,63 @@ pub fn handle_login(
 }
 
 pub fn handle_logout(
-    _state: &mut ShellState,
+    state: &mut ShellState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/logout", args, 0, 0)?;
-    // TODO: disconnect client session from server.
+
+    let request = build_logout_request();
+    stream.write_all(request.as_bytes())?;
+
+    let mut response = String::new();
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let bytes_read = reader.read_line(&mut response)?;
+    if bytes_read == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "server closed connection while waiting for logout response",
+        ));
+    }
+
+    let response = response.trim_end_matches(['\r', '\n']);
+    let code = parse_response_code(response)?;
+
+    if code == 401 {
+        unsafe {
+            let _ = libcli::client_error_unauthorized();
+        }
+        return Ok(());
+    }
+
+    if code != 200 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            response.to_string(),
+        ));
+    }
+
+    let user_uuid = state.user_uuid.take();
+    let user_name = state.user_name.take();
+
+    if let (Some(user_uuid), Some(user_name)) = (user_uuid, user_name) {
+        let user_uuid_cstr = CString::new(user_uuid).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidData, "user UUID contains null byte")
+        })?;
+        let user_name_cstr = CString::new(user_name).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "user name contains an invalid NUL byte",
+            )
+        })?;
+
+        unsafe {
+            let _ =
+                libcli::client_event_logged_out(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
+        }
+    }
+
     Ok(())
 }
 
