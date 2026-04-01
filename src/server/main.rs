@@ -1,8 +1,13 @@
 use std::env;
 
 mod cli;
+mod commands;
+mod libsrv;
 mod network;
+mod protocol;
 mod signal;
+mod storage;
+mod users;
 
 use cli::parse_port_arg;
 use network::{configure_listener, create_listener, run_accept_loop};

@@ -1,8 +1,12 @@
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::atomic::Ordering;
 
+use super::commands::{command_registry, emit_user_logged_out, SessionState};
+use super::protocol::{parse_request_line, response};
 use super::signal::SHOULD_STOP;
+use super::storage::{default_teams_path, default_users_path, ServerStorage};
+use super::users::UserStore;
 
 pub fn create_listener(port_arg: &str, port: u16) -> TcpListener {
     let addr = format!("0.0.0.0:{}", port);
@@ -22,51 +26,111 @@ pub fn configure_listener(listener: &TcpListener) {
     }
 }
 
-fn handle_client(stream: &mut TcpStream, peer: std::net::SocketAddr) -> bool {
-    let mut buf = [0; 1024];
-    match stream.peek(&mut buf) {
+struct ClientSession {
+    stream: TcpStream,
+    peer: std::net::SocketAddr,
+    input_buffer: String,
+    state: SessionState,
+}
+
+fn process_line(
+    session: &mut ClientSession,
+    commands: &super::commands::CommandMap,
+    users: &mut UserStore,
+    storage: &mut ServerStorage,
+    line: &str,
+) -> String {
+    let parsed = match parse_request_line(line) {
+        Ok(parsed) => parsed,
+        Err(_) => return response(501, Some("\"bad request\"")),
+    };
+
+    if session.state.user_uuid.is_none() && parsed.name != "LOGIN" {
+        return response(401, Some("\"unauthorized\""));
+    }
+
+    match commands.get(parsed.name.as_str()) {
+        Some(definition) => {
+            (definition.handler)(&mut session.state, commands, users, storage, &parsed.args)
+        }
+        None => response(404, Some("\"not found\"")),
+    }
+}
+
+fn send_response(session: &mut ClientSession, payload: &str) -> bool {
+    match session.stream.write_all(payload.as_bytes()) {
+        Ok(_) => true,
+        Err(err) if err.kind() == ErrorKind::WouldBlock => true,
+        Err(err) => {
+            eprintln!("Client write error for {}: {}", session.peer, err);
+            false
+        }
+    }
+}
+
+fn handle_client(
+    session: &mut ClientSession,
+    commands: &super::commands::CommandMap,
+    users: &mut UserStore,
+    storage: &mut ServerStorage,
+) -> bool {
+    let mut buf = [0u8; 1024];
+    match session.stream.read(&mut buf) {
         Ok(0) => {
-            println!("Client disconnected: {}", peer);
-            return false;
+            if let Some(user_uuid) = session.state.user_uuid.as_deref() {
+                emit_user_logged_out(user_uuid);
+            }
+            session.state.user_uuid = None;
+            false
         }
         Ok(n) => {
-            let mut read_buf = vec![0; n];
-            match std::io::Read::read(stream, &mut read_buf) {
-                Ok(0) => {
-                    println!("Client disconnected: {}", peer);
-                    return false;
+            session
+                .input_buffer
+                .push_str(String::from_utf8_lossy(&buf[..n]).as_ref());
+
+            while let Some(newline_idx) = session.input_buffer.find('\n') {
+                let line = session.input_buffer[..=newline_idx]
+                    .trim_end_matches(['\r', '\n'])
+                    .to_string();
+                session.input_buffer.drain(..=newline_idx);
+                if line.is_empty() {
+                    continue;
                 }
-                Ok(_) => {
-                    if let Ok(text) = String::from_utf8(read_buf) {
-                        for line in text.lines() {
-                            if !line.is_empty() {
-                                println!("{} > {}", peer, line);
-                            }
-                        }
-                    }
-                    return true;
-                }
-                Err(err) if err.kind() == ErrorKind::WouldBlock => {
-                    return true;
-                }
-                Err(err) => {
-                    eprintln!("Client read error for {}: {}", peer, err);
+
+                let reply = process_line(session, commands, users, storage, &line);
+                if !send_response(session, &reply) {
                     return false;
                 }
             }
+
+            true
         }
-        Err(err) if err.kind() == ErrorKind::WouldBlock => {
-            return true;
-        }
+        Err(err) if err.kind() == ErrorKind::WouldBlock => true,
         Err(err) => {
-            eprintln!("Client peek error for {}: {}", peer, err);
-            return false;
+            eprintln!("Client read error for {}: {}", session.peer, err);
+            false
         }
     }
 }
 
 pub fn run_accept_loop(listener: &TcpListener) {
-    let mut clients: Vec<(TcpStream, std::net::SocketAddr)> = Vec::new();
+    let mut clients: Vec<ClientSession> = Vec::new();
+    let commands = command_registry();
+    let mut storage =
+        match ServerStorage::load_or_default(default_users_path(), default_teams_path()) {
+            Ok(storage) => storage,
+            Err(err) => {
+                eprintln!("Failed to initialize JSON storage: {}", err);
+                std::process::exit(1);
+            }
+        };
+
+    let mut users = UserStore::from_pairs(storage.user_pairs());
+    println!(
+        "Using JSON storage files: users={}, teams={}",
+        storage.users_file().display(),
+        storage.teams_file().display()
+    );
 
     while !SHOULD_STOP.load(Ordering::SeqCst) {
         match listener.accept() {
@@ -74,8 +138,12 @@ pub fn run_accept_loop(listener: &TcpListener) {
                 if let Err(err) = stream.set_nonblocking(true) {
                     eprintln!("Failed to set non-blocking on client socket: {}", err);
                 } else {
-                    println!("Client connected: {}", peer);
-                    clients.push((stream, peer));
+                    clients.push(ClientSession {
+                        stream,
+                        peer,
+                        input_buffer: String::new(),
+                        state: SessionState::default(),
+                    });
                 }
             }
             Err(err) if err.kind() == ErrorKind::WouldBlock => {}
@@ -84,13 +152,15 @@ pub fn run_accept_loop(listener: &TcpListener) {
             }
         }
 
-        clients.retain_mut(|(stream, peer)| handle_client(stream, *peer));
+        clients.retain_mut(|session| handle_client(session, &commands, &mut users, &mut storage));
 
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
-    for (stream, peer) in clients {
-        let _ = stream.shutdown(Shutdown::Both);
-        println!("Closed connection: {}", peer);
+    for session in clients {
+        if let Some(user_uuid) = session.state.user_uuid.as_deref() {
+            emit_user_logged_out(user_uuid);
+        }
+        let _ = session.stream.shutdown(Shutdown::Both);
     }
 }
