@@ -1,6 +1,6 @@
 use std::os::raw::{c_char, c_int, c_long};
 
-pub type time_t = c_long;
+pub type TimeT = c_long;
 
 unsafe extern "C" {
     pub fn client_event_logged_in(user_uuid: *const c_char, user_name: *const c_char) -> c_int;
@@ -34,7 +34,7 @@ unsafe extern "C" {
     pub fn client_event_thread_created(
         thread_uuid: *const c_char,
         user_uuid: *const c_char,
-        thread_timestamp: time_t,
+        thread_timestamp: TimeT,
         thread_title: *const c_char,
         thread_body: *const c_char,
     ) -> c_int;
@@ -60,7 +60,7 @@ unsafe extern "C" {
     pub fn client_channel_print_threads(
         thread_uuid: *const c_char,
         user_uuid: *const c_char,
-        thread_timestamp: time_t,
+        thread_timestamp: TimeT,
         thread_title: *const c_char,
         thread_body: *const c_char,
     ) -> c_int;
@@ -68,13 +68,13 @@ unsafe extern "C" {
     pub fn client_thread_print_replies(
         thread_uuid: *const c_char,
         user_uuid: *const c_char,
-        reply_timestamp: time_t,
+        reply_timestamp: TimeT,
         reply_body: *const c_char,
     ) -> c_int;
 
     pub fn client_private_message_print_messages(
         sender_uuid: *const c_char,
-        message_timestamp: time_t,
+        message_timestamp: TimeT,
         message_body: *const c_char,
     ) -> c_int;
 
@@ -111,7 +111,7 @@ unsafe extern "C" {
     pub fn client_print_thread(
         thread_uuid: *const c_char,
         user_uuid: *const c_char,
-        thread_timestamp: time_t,
+        thread_timestamp: TimeT,
         thread_title: *const c_char,
         thread_body: *const c_char,
     ) -> c_int;
@@ -131,7 +131,7 @@ unsafe extern "C" {
     pub fn client_print_thread_created(
         thread_uuid: *const c_char,
         user_uuid: *const c_char,
-        thread_timestamp: time_t,
+        thread_timestamp: TimeT,
         thread_title: *const c_char,
         thread_body: *const c_char,
     ) -> c_int;
@@ -139,7 +139,7 @@ unsafe extern "C" {
     pub fn client_print_reply_created(
         thread_uuid: *const c_char,
         user_uuid: *const c_char,
-        reply_timestamp: time_t,
+        reply_timestamp: TimeT,
         reply_body: *const c_char,
     ) -> c_int;
 

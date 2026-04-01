@@ -1,4 +1,7 @@
-use crate::commands::{command_registry, dispatch_slash_command, write_raw_command, ShellState};
+use crate::commands::{
+    command_registry, dispatch_slash_command, read_server_response_line, write_raw_command,
+    ShellState,
+};
 use std::io::{self, Write};
 use std::net::{Shutdown, TcpStream};
 
@@ -35,6 +38,14 @@ pub fn run_shell(stream: &mut TcpStream) {
                         if let Err(err) = write_raw_command(stream, command) {
                             eprintln!("failed to send command: {}", err);
                             break;
+                        }
+
+                        match read_server_response_line(stream) {
+                            Ok(response) => println!("{}", response),
+                            Err(err) => {
+                                eprintln!("failed to read response: {}", err);
+                                break;
+                            }
                         }
                     }
                     Err(err) => {

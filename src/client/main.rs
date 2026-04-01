@@ -1,6 +1,7 @@
 use std::env;
 
 mod commands;
+mod libcli;
 mod net;
 mod shell;
 

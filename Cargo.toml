@@ -6,6 +6,10 @@ build = "build.rs"
 
 [dependencies]
 
+[lib]
+name = "myteams_json"
+path = "src/json/lib.rs"
+
 [[bin]]
 name = "myteams_cli"
 path = "src/client/main.rs"

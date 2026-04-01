@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 
 use crate::commands::{CommandMap, ShellState};
@@ -32,6 +32,20 @@ fn tokenize_command(line: &str) -> Vec<String> {
 pub fn write_raw_command(stream: &mut TcpStream, command: &str) -> io::Result<()> {
     let payload = format!("{}\r\n", command);
     stream.write_all(payload.as_bytes())
+}
+
+pub fn read_server_response_line(stream: &mut TcpStream) -> io::Result<String> {
+    let mut response = String::new();
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let bytes_read = reader.read_line(&mut response)?;
+    if bytes_read == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "server closed connection while waiting for response",
+        ));
+    }
+
+    Ok(response.trim_end_matches(['\r', '\n']).to_string())
 }
 
 pub fn dispatch_slash_command(

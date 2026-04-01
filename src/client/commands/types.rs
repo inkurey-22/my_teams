@@ -12,17 +12,14 @@ pub struct CommandContext {
 #[derive(Default)]
 pub struct ShellState {
     pub user_name: Option<String>,
+    pub user_uuid: Option<String>,
     pub context: CommandContext,
 }
 
 pub type CommandMap = HashMap<&'static str, CommandDefinition>;
 
-pub type CommandHandler = fn(
-    &mut ShellState,
-    &CommandMap,
-    &mut TcpStream,
-    &[String],
-) -> io::Result<()>;
+pub type CommandHandler =
+    fn(&mut ShellState, &CommandMap, &mut TcpStream, &[String]) -> io::Result<()>;
 
 pub struct CommandDefinition {
     pub usage: &'static str,
