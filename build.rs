@@ -23,7 +23,7 @@ fn main() {
         println!("cargo:rustc-link-arg-bin={bin}=-Wl,--as-needed");
 
         // Embed runtime lookup paths so no env var or launcher patching is needed.
-        println!("cargo:rustc-link-arg-bin={bin}=-Wl,-rpath,$ORIGIN/../../libs/myteams");
-        println!("cargo:rustc-link-arg-bin={bin}=-Wl,-rpath,$ORIGIN/libs/myteams");
+        // println!("cargo:rustc-link-arg-bin={bin}=-Wl,-rpath,$ORIGIN/../../libs/myteams");
+        // println!("cargo:rustc-link-arg-bin={bin}=-Wl,-rpath,$ORIGIN/libs/myteams");
     }
 }
