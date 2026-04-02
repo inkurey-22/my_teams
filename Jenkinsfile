@@ -2,6 +2,7 @@ pipeline {
   agent any
 
   environment {
+    CONTAINER = 'rust:trixie'
     MIRROR_REPO = 'https://github.com/EpitechPGE2-2025/G-NWP-400-LIL-4-1-myteams-1.git'
     MIRROR_CRED = 'jenkins-pat'
   }
@@ -13,11 +14,15 @@ pipeline {
 
     stage('Compilation') {
       steps {
-        sh '''bash -c "
+        script {
+          docker.image(env.CONTAINER).inside('-i') {
+            sh '''bash -c "
 set -euo pipefail
 cd ${WORKSPACE}
 cargo check
 "'''
+          }
+        }
       }
     }
 
