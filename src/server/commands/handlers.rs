@@ -44,6 +44,26 @@ fn call_event_user_logged_in(user_uuid: &str) {
     }
 }
 
+fn call_event_private_message_sent(sender_uuid: &str, receiver_uuid: &str, message_body: &str) {
+    let Ok(sender) = CString::new(sender_uuid) else {
+        return;
+    };
+    let Ok(receiver) = CString::new(receiver_uuid) else {
+        return;
+    };
+    let Ok(body) = CString::new(message_body) else {
+        return;
+    };
+
+    unsafe {
+        let _ = libsrv::server_event_private_message_sended(
+            sender.as_ptr(),
+            receiver.as_ptr(),
+            body.as_ptr(),
+        );
+    }
+}
+
 pub fn emit_user_logged_out(user_uuid: &str) {
     let Ok(uuid) = CString::new(user_uuid) else {
         return;
@@ -150,16 +170,29 @@ pub fn handle_user(
 }
 
 pub fn handle_send(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> String {
     if validate_arg_count(args, 2, 2).is_err() {
         return bad_request();
     }
-    not_found()
+
+    let Some(sender_uuid) = state.user_uuid.as_deref() else {
+        return response(401, Some("\"unauthorized\""));
+    };
+
+    let receiver_uuid = &args[0];
+    let message_body = &args[1];
+
+    if !users.contains_uuid(receiver_uuid) {
+        return not_found();
+    }
+
+    call_event_private_message_sent(sender_uuid, receiver_uuid, message_body);
+    response(200, None)
 }
 
 pub fn handle_messages(

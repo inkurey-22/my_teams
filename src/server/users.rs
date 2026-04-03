@@ -32,6 +32,10 @@ impl UserStore {
         self.by_name.insert(user_name.to_string(), uuid.clone());
         (uuid, true)
     }
+
+    pub fn contains_uuid(&self, user_uuid: &str) -> bool {
+        self.by_name.values().any(|uuid| uuid == user_uuid)
+    }
 }
 
 fn make_uuid_v4_like(user_name: &str, sequence: u64) -> String {

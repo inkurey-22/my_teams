@@ -3,7 +3,8 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 
 use crate::commands::protocol::{
-    build_login_request, build_logout_request, extract_uuid_from_body, parse_response_code,
+    build_login_request, build_logout_request, build_send_request, extract_uuid_from_body,
+    parse_response_code,
 };
 use crate::commands::{CommandMap, ShellState};
 use crate::libcli;
@@ -182,14 +183,52 @@ pub fn handle_user(
 pub fn handle_send(
     _state: &mut ShellState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/send", args, 2, 2)?;
-    let _user_uuid = &args[0];
-    let _message_body = &args[1];
-    // TODO: send private message to user.
-    Ok(())
+
+    let user_uuid = &args[0];
+    let message_body = &args[1];
+    let request = build_send_request(user_uuid, message_body);
+    stream.write_all(request.as_bytes())?;
+
+    let mut response = String::new();
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let bytes_read = reader.read_line(&mut response)?;
+    if bytes_read == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "server closed connection while waiting for send response",
+        ));
+    }
+
+    let response = response.trim_end_matches(['\r', '\n']);
+    let code = parse_response_code(response)?;
+
+    match code {
+        200 => Ok(()),
+        401 => {
+            unsafe {
+                let _ = libcli::client_error_unauthorized();
+            }
+            Ok(())
+        }
+        404 => {
+            let user_uuid_cstr = CString::new(user_uuid.as_str()).map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidInput, "user UUID contains null byte")
+            })?;
+
+            unsafe {
+                let _ = libcli::client_error_unknown_user(user_uuid_cstr.as_ptr());
+            }
+            Ok(())
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            response.to_string(),
+        )),
+    }
 }
 
 pub fn handle_messages(

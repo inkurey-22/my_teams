@@ -25,6 +25,12 @@ fclean: clean
 
 re: fclean all
 
+run_server: all
+	LD_LIBRARY_PATH=./libs/myteams ./myteams_server 4242
+
+run_client: all
+	LD_LIBRARY_PATH=./libs/myteams ./myteams_cli localhost 4242
+
 debug:
 	cargo build
 	cp $(DEBUG_DIR)/myteams_server .

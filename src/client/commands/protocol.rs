@@ -4,12 +4,63 @@ fn quote_net_argument(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn tokenize_info_body(input: &str) -> io::Result<Vec<String>> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut escaped = false;
+
+    for ch in input.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_quotes => {
+                escaped = true;
+            }
+            '"' => {
+                in_quotes = !in_quotes;
+            }
+            c if c.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if escaped || in_quotes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "unterminated quoted info payload",
+        ));
+    }
+
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+
+    Ok(tokens)
+}
+
 pub fn build_login_request(user_name: &str) -> String {
     format!("C100 LOGIN \"{}\"\r\n", quote_net_argument(user_name))
 }
 
 pub fn build_logout_request() -> String {
     "C100 LOGOUT\r\n".to_string()
+}
+
+pub fn build_send_request(user_uuid: &str, message_body: &str) -> String {
+    format!(
+        "C100 SEND \"{}\" \"{}\"\r\n",
+        quote_net_argument(user_uuid),
+        quote_net_argument(message_body)
+    )
 }
 
 pub fn parse_response_code(response: &str) -> io::Result<u16> {
@@ -61,4 +112,26 @@ pub fn extract_uuid_from_body(response: &str) -> io::Result<String> {
     })?;
 
     Ok(uuid.to_string())
+}
+
+pub fn parse_private_message_info(line: &str) -> io::Result<Option<(String, String)>> {
+    let mut parts = line.trim().splitn(2, char::is_whitespace);
+    let header = parts
+        .next()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "empty server message"))?;
+
+    if header != "I100" {
+        return Ok(None);
+    }
+
+    let body = parts
+        .next()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing info message body"))?;
+    let tokens = tokenize_info_body(body)?;
+
+    if tokens.len() != 3 || tokens[0] != "NEW_MESSAGE" {
+        return Ok(None);
+    }
+
+    Ok(Some((tokens[1].clone(), tokens[2].clone())))
 }
