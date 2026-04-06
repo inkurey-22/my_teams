@@ -1,7 +1,7 @@
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, Write};
 use std::net::TcpStream;
 
-use crate::commands::{CommandMap, ShellState};
+use crate::commands::{CommandMap, SessionState};
 
 fn tokenize_command(line: &str) -> Vec<String> {
     let mut tokens = Vec::new();
@@ -29,28 +29,14 @@ fn tokenize_command(line: &str) -> Vec<String> {
     tokens
 }
 
-pub fn write_raw_command(stream: &mut TcpStream, command: &str) -> io::Result<()> {
-    let payload = format!("{}\r\n", command);
+pub fn write_request_line(stream: &mut TcpStream, line: &str) -> io::Result<()> {
+    let payload = format!("{}\r\n", line);
     stream.write_all(payload.as_bytes())
 }
 
-pub fn read_server_response_line(stream: &mut TcpStream) -> io::Result<String> {
-    let mut response = String::new();
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let bytes_read = reader.read_line(&mut response)?;
-    if bytes_read == 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "server closed connection while waiting for response",
-        ));
-    }
-
-    Ok(response.trim_end_matches(['\r', '\n']).to_string())
-}
-
-pub fn dispatch_slash_command(
-    state: &mut ShellState,
-    registry: &CommandMap,
+pub fn dispatch_line(
+    state: &mut SessionState,
+    commands: &CommandMap,
     stream: &mut TcpStream,
     line: &str,
 ) -> io::Result<bool> {
@@ -66,9 +52,9 @@ pub fn dispatch_slash_command(
     let command_name = tokens[0].as_str();
     let args = &tokens[1..];
 
-    match registry.get(command_name) {
+    match commands.get(command_name) {
         Some(command) => {
-            (command.handler)(state, registry, stream, args)?;
+            (command.handler)(state, commands, stream, args)?;
         }
         None => {
             eprintln!("unknown command: {}", command_name);

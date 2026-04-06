@@ -1,10 +1,13 @@
+mod dispatcher;
 mod handlers;
-mod parser;
 mod protocol;
 mod registry;
+mod responses;
 mod types;
 
-pub use parser::{dispatch_slash_command, read_server_response_line, write_raw_command};
+pub use dispatcher::{dispatch_line, write_request_line};
+pub use protocol::parse_new_message_info;
 pub use registry::command_registry;
-pub use types::ShellState;
-pub(crate) use types::{CommandDefinition, CommandMap};
+pub use responses::handle_response_line;
+pub use types::SessionState;
+pub(crate) use types::{CommandDefinition, CommandMap, PendingRequest};

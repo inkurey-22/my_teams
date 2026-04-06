@@ -3,6 +3,7 @@ use std::env;
 mod commands;
 mod libcli;
 mod net;
+mod poll;
 mod shell;
 
 fn print_usage() {

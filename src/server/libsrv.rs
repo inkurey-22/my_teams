@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::os::raw::{c_char, c_int};
 
 unsafe extern "C" {

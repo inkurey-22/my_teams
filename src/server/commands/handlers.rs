@@ -1,6 +1,6 @@
 use std::ffi::CString;
 
-use crate::commands::{CommandMap, SessionState};
+use crate::commands::{CommandMap, CommandOutcome, InfoEvent, SessionState};
 use crate::libsrv;
 use crate::protocol::{quoted, response};
 use crate::storage::ServerStorage;
@@ -12,6 +12,10 @@ fn bad_request() -> String {
 
 fn not_found() -> String {
     response(404, Some("\"not found\""))
+}
+
+fn unknown_user(user_uuid: &str) -> String {
+    response(404, Some(&quoted(user_uuid)))
 }
 
 fn validate_arg_count(args: &[String], min: usize, max: usize) -> Result<(), String> {
@@ -60,9 +64,9 @@ pub fn handle_help(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
 
     let mut commands: Vec<_> = registry.iter().collect();
@@ -76,7 +80,7 @@ pub fn handle_help(
         .collect::<Vec<_>>()
         .join("\\n");
 
-    response(200, Some(&quoted(&body)))
+    CommandOutcome::response_only(response(200, Some(&quoted(&body))))
 }
 
 pub fn handle_login(
@@ -85,9 +89,9 @@ pub fn handle_login(
     users: &mut UserStore,
     storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() || args[0].is_empty() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
 
     let user_name = &args[0];
@@ -102,7 +106,7 @@ pub fn handle_login(
     state.user_uuid = Some(user_uuid.clone());
     call_event_user_logged_in(&user_uuid);
 
-    response(200, Some(&quoted(&user_uuid)))
+    CommandOutcome::response_only(response(200, Some(&quoted(&user_uuid))))
 }
 
 pub fn handle_logout(
@@ -111,16 +115,16 @@ pub fn handle_logout(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
 
     if let Some(user_uuid) = state.user_uuid.take() {
         emit_user_logged_out(&user_uuid);
     }
 
-    response(200, None)
+    CommandOutcome::response_only(response(200, None))
 }
 
 pub fn handle_users(
@@ -129,11 +133,11 @@ pub fn handle_users(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_user(
@@ -142,24 +146,66 @@ pub fn handle_user(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_send(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
-    if validate_arg_count(args, 2, 2).is_err() {
-        return bad_request();
+) -> CommandOutcome {
+    if validate_arg_count(args, 2, 2).is_err() || args[0].is_empty() {
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+
+    let Some(sender_uuid) = state.user_uuid.as_deref() else {
+        return CommandOutcome::response_only(response(401, Some("\"unauthorized\"")));
+    };
+
+    let recipient_uuid = &args[0];
+    let message_body = &args[1];
+
+    if !users.exists_uuid(recipient_uuid) {
+        return CommandOutcome::response_only(unknown_user(recipient_uuid));
+    }
+
+    let Ok(sender_cstr) = CString::new(sender_uuid) else {
+        return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+    };
+    let Ok(receiver_cstr) = CString::new(recipient_uuid.as_str()) else {
+        return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+    };
+    let Ok(message_cstr) = CString::new(message_body.as_str()) else {
+        return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+    };
+
+    unsafe {
+        let _ = libsrv::server_event_private_message_sended(
+            sender_cstr.as_ptr(),
+            receiver_cstr.as_ptr(),
+            message_cstr.as_ptr(),
+        );
+    }
+
+    let info_payload = format!(
+        "I100 NEW_MESSAGE {} {}\r\n",
+        quoted(sender_uuid),
+        quoted(message_body)
+    );
+
+    CommandOutcome {
+        response: response(200, None),
+        info_events: vec![InfoEvent {
+            recipient_user_uuid: recipient_uuid.clone(),
+            payload: info_payload,
+        }],
+    }
 }
 
 pub fn handle_messages(
@@ -168,11 +214,11 @@ pub fn handle_messages(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_subscribe(
@@ -181,11 +227,11 @@ pub fn handle_subscribe(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_subscribed(
@@ -194,11 +240,11 @@ pub fn handle_subscribed(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 1).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_unsubscribe(
@@ -207,11 +253,11 @@ pub fn handle_unsubscribe(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_use(
@@ -220,11 +266,11 @@ pub fn handle_use(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 3).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_create(
@@ -233,11 +279,11 @@ pub fn handle_create(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_list(
@@ -246,11 +292,11 @@ pub fn handle_list(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }
 
 pub fn handle_info(
@@ -259,9 +305,9 @@ pub fn handle_info(
     _users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
-) -> String {
+) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
-        return bad_request();
+        return CommandOutcome::response_only(bad_request());
     }
-    not_found()
+    CommandOutcome::response_only(not_found())
 }

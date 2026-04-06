@@ -1,12 +1,17 @@
-use std::io::{ErrorKind, Read, Write};
+use std::io::ErrorKind;
 use std::net::{Shutdown, TcpListener, TcpStream};
+use std::os::fd::AsRawFd;
 use std::sync::atomic::Ordering;
 
-use super::commands::{command_registry, emit_user_logged_out, SessionState};
-use super::protocol::{parse_request_line, response};
+use super::commands::{
+    command_registry, dispatch_line, emit_user_logged_out, InfoEvent, SessionState,
+};
+use super::notifier;
 use super::signal::SHOULD_STOP;
 use super::storage::{default_teams_path, default_users_path, ServerStorage};
+use super::transport::{read_lines_nonblocking, write_nonblocking, ReadLinesResult};
 use super::users::UserStore;
+use crate::poll::{wait as poll_wait, PollFd, POLLERR, POLLHUP, POLLIN, POLLNVAL};
 
 pub fn create_listener(port_arg: &str, port: u16) -> TcpListener {
     let addr = format!("0.0.0.0:{}", port);
@@ -33,37 +38,36 @@ struct ClientSession {
     state: SessionState,
 }
 
-fn process_line(
-    session: &mut ClientSession,
-    commands: &super::commands::CommandMap,
-    users: &mut UserStore,
-    storage: &mut ServerStorage,
-    line: &str,
-) -> String {
-    let parsed = match parse_request_line(line) {
-        Ok(parsed) => parsed,
-        Err(_) => return response(501, Some("\"bad request\"")),
-    };
-
-    if session.state.user_uuid.is_none() && parsed.name != "LOGIN" {
-        return response(401, Some("\"unauthorized\""));
-    }
-
-    match commands.get(parsed.name.as_str()) {
-        Some(definition) => {
-            (definition.handler)(&mut session.state, commands, users, storage, &parsed.args)
-        }
-        None => response(404, Some("\"not found\"")),
-    }
-}
-
 fn send_response(session: &mut ClientSession, payload: &str) -> bool {
-    match session.stream.write_all(payload.as_bytes()) {
+    match write_nonblocking(&mut session.stream, payload) {
         Ok(_) => true,
-        Err(err) if err.kind() == ErrorKind::WouldBlock => true,
         Err(err) => {
             eprintln!("Client write error for {}: {}", session.peer, err);
             false
+        }
+    }
+}
+
+fn accept_pending_clients(listener: &TcpListener, clients: &mut Vec<ClientSession>) {
+    loop {
+        match listener.accept() {
+            Ok((stream, peer)) => {
+                if let Err(err) = stream.set_nonblocking(true) {
+                    eprintln!("Failed to set non-blocking on client socket: {}", err);
+                } else {
+                    clients.push(ClientSession {
+                        stream,
+                        peer,
+                        input_buffer: String::new(),
+                        state: SessionState::default(),
+                    });
+                }
+            }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => break,
+            Err(err) => {
+                eprintln!("Connection error: {}", err);
+                break;
+            }
         }
     }
 }
@@ -73,42 +77,31 @@ fn handle_client(
     commands: &super::commands::CommandMap,
     users: &mut UserStore,
     storage: &mut ServerStorage,
-) -> bool {
-    let mut buf = [0u8; 1024];
-    match session.stream.read(&mut buf) {
-        Ok(0) => {
+) -> (bool, Vec<InfoEvent>) {
+    let mut pending_info_events = Vec::new();
+    match read_lines_nonblocking(&mut session.stream, &mut session.input_buffer) {
+        Ok(ReadLinesResult::Disconnected) => {
             if let Some(user_uuid) = session.state.user_uuid.as_deref() {
                 emit_user_logged_out(user_uuid);
             }
             session.state.user_uuid = None;
-            false
+            (false, pending_info_events)
         }
-        Ok(n) => {
-            session
-                .input_buffer
-                .push_str(String::from_utf8_lossy(&buf[..n]).as_ref());
-
-            while let Some(newline_idx) = session.input_buffer.find('\n') {
-                let line = session.input_buffer[..=newline_idx]
-                    .trim_end_matches(['\r', '\n'])
-                    .to_string();
-                session.input_buffer.drain(..=newline_idx);
-                if line.is_empty() {
-                    continue;
+        Ok(ReadLinesResult::Lines(lines)) => {
+            for line in lines {
+                let outcome = dispatch_line(&mut session.state, commands, users, storage, &line);
+                if !send_response(session, &outcome.response) {
+                    return (false, pending_info_events);
                 }
-
-                let reply = process_line(session, commands, users, storage, &line);
-                if !send_response(session, &reply) {
-                    return false;
-                }
+                pending_info_events.extend(outcome.info_events);
             }
 
-            true
+            (true, pending_info_events)
         }
-        Err(err) if err.kind() == ErrorKind::WouldBlock => true,
+        Ok(ReadLinesResult::WouldBlock) => (true, pending_info_events),
         Err(err) => {
             eprintln!("Client read error for {}: {}", session.peer, err);
-            false
+            (false, pending_info_events)
         }
     }
 }
@@ -133,28 +126,64 @@ pub fn run_accept_loop(listener: &TcpListener) {
     );
 
     while !SHOULD_STOP.load(Ordering::SeqCst) {
-        match listener.accept() {
-            Ok((stream, peer)) => {
-                if let Err(err) = stream.set_nonblocking(true) {
-                    eprintln!("Failed to set non-blocking on client socket: {}", err);
-                } else {
-                    clients.push(ClientSession {
-                        stream,
-                        peer,
-                        input_buffer: String::new(),
-                        state: SessionState::default(),
-                    });
-                }
-            }
-            Err(err) if err.kind() == ErrorKind::WouldBlock => {}
+        let active_clients = std::mem::take(&mut clients);
+        let mut poll_fds = Vec::with_capacity(active_clients.len() + 1);
+        poll_fds.push(PollFd::new(listener.as_raw_fd(), POLLIN));
+        for session in &active_clients {
+            poll_fds.push(PollFd::new(session.stream.as_raw_fd(), POLLIN));
+        }
+
+        match poll_wait(&mut poll_fds, -1) {
+            Ok(_) => {}
             Err(err) => {
-                eprintln!("Connection error: {}", err);
+                if err.kind() == ErrorKind::Interrupted {
+                    continue;
+                }
+
+                eprintln!("poll error: {}", err);
+                break;
             }
         }
 
-        clients.retain_mut(|session| handle_client(session, &commands, &mut users, &mut storage));
+        if poll_fds[0].revents & POLLIN != 0 {
+            accept_pending_clients(listener, &mut clients);
+        }
 
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        let mut pending_info_events = Vec::new();
+        let mut next_clients = Vec::with_capacity(active_clients.len() + clients.len());
+
+        for (index, mut session) in active_clients.into_iter().enumerate() {
+            let revents = poll_fds[index + 1].revents;
+            if revents & (POLLERR | POLLHUP | POLLNVAL) != 0 {
+                if let Some(user_uuid) = session.state.user_uuid.as_deref() {
+                    emit_user_logged_out(user_uuid);
+                }
+                let _ = session.stream.shutdown(Shutdown::Both);
+                continue;
+            }
+
+            let mut keep = true;
+            if revents & POLLIN != 0 {
+                let (still_keep, events) =
+                    handle_client(&mut session, &commands, &mut users, &mut storage);
+                pending_info_events.extend(events);
+                keep = still_keep;
+            }
+
+            if keep {
+                next_clients.push(session);
+            }
+        }
+
+        next_clients.append(&mut clients);
+        clients = next_clients;
+
+        notifier::dispatch_info_events(
+            &mut clients,
+            &pending_info_events,
+            |session| session.state.user_uuid.as_deref(),
+            |session, payload| send_response(session, payload),
+        );
     }
 
     for session in clients {
