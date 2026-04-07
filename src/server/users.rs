@@ -6,35 +6,95 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Default)]
 pub struct UserStore {
     by_name: HashMap<String, String>,
+    by_uuid: HashMap<String, String>,
+    online_sessions: HashMap<String, usize>,
     sequence: u64,
 }
 
 impl UserStore {
     pub fn from_pairs(pairs: impl IntoIterator<Item = (String, String)>) -> Self {
         let mut by_name = HashMap::new();
+        let mut by_uuid = HashMap::new();
         for (name, uuid) in pairs {
+            by_uuid.insert(uuid.clone(), name.clone());
             by_name.insert(name, uuid);
         }
 
         Self {
             by_name,
+            by_uuid,
+            online_sessions: HashMap::new(),
             sequence: 0,
         }
     }
 
     pub fn login(&mut self, user_name: &str) -> (String, bool) {
         if let Some(existing) = self.by_name.get(user_name) {
-            return (existing.clone(), false);
+            let existing_uuid = existing.clone();
+            self.bump_online(&existing_uuid);
+            return (existing_uuid, false);
         }
 
         self.sequence = self.sequence.wrapping_add(1);
         let uuid = make_uuid_v4_like(user_name, self.sequence);
         self.by_name.insert(user_name.to_string(), uuid.clone());
+        self.by_uuid.insert(uuid.clone(), user_name.to_string());
+        self.bump_online(&uuid);
         (uuid, true)
     }
 
     pub fn exists_uuid(&self, user_uuid: &str) -> bool {
-        self.by_name.values().any(|uuid| uuid == user_uuid)
+        self.by_uuid.contains_key(user_uuid)
+    }
+
+    pub fn logout(&mut self, user_uuid: &str) {
+        let mut should_remove = false;
+
+        if let Some(count) = self.online_sessions.get_mut(user_uuid) {
+            if *count <= 1 {
+                should_remove = true;
+            } else {
+                *count -= 1;
+            }
+        }
+
+        if should_remove {
+            self.online_sessions.remove(user_uuid);
+        }
+    }
+
+    pub fn list_users(&self) -> Vec<(String, String, bool)> {
+        let mut users = self
+            .by_uuid
+            .iter()
+            .map(|(uuid, name)| {
+                (
+                    uuid.clone(),
+                    name.clone(),
+                    self.is_online(uuid),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        users.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+        users
+    }
+
+    pub fn user_details(&self, user_uuid: &str) -> Option<(String, bool)> {
+        self.by_uuid.get(user_uuid).map(|name| {
+            (name.clone(), self.is_online(user_uuid))
+        })
+    }
+
+    fn bump_online(&mut self, user_uuid: &str) {
+        let counter = self.online_sessions.entry(user_uuid.to_string()).or_insert(0);
+        *counter += 1;
+    }
+
+    fn is_online(&self, user_uuid: &str) -> bool {
+        self.online_sessions
+            .get(user_uuid)
+            .is_some_and(|count| *count > 0)
     }
 }
 

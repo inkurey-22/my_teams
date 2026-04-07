@@ -112,7 +112,7 @@ pub fn handle_login(
 pub fn handle_logout(
     state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
@@ -121,6 +121,7 @@ pub fn handle_logout(
     }
 
     if let Some(user_uuid) = state.user_uuid.take() {
+        users.logout(&user_uuid);
         emit_user_logged_out(&user_uuid);
     }
 
@@ -130,27 +131,49 @@ pub fn handle_logout(
 pub fn handle_users(
     _state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
         return CommandOutcome::response_only(bad_request());
     }
-    CommandOutcome::response_only(not_found())
+
+    let mut chunks = vec![quoted("USERS")];
+    for (user_uuid, user_name, is_online) in users.list_users() {
+        chunks.push(quoted(&user_uuid));
+        chunks.push(quoted(&user_name));
+        chunks.push(quoted(if is_online { "1" } else { "0" }));
+    }
+
+    CommandOutcome::response_only(response(200, Some(&chunks.join(" "))))
 }
 
 pub fn handle_user(
     _state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
         return CommandOutcome::response_only(bad_request());
     }
-    CommandOutcome::response_only(not_found())
+
+    let user_uuid = &args[0];
+    let Some((user_name, is_online)) = users.user_details(user_uuid) else {
+        return CommandOutcome::response_only(unknown_user(user_uuid));
+    };
+
+    let body = [
+        quoted("USER"),
+        quoted(user_uuid),
+        quoted(&user_name),
+        quoted(if is_online { "1" } else { "0" }),
+    ]
+    .join(" ");
+
+    CommandOutcome::response_only(response(200, Some(&body)))
 }
 
 pub fn handle_send(

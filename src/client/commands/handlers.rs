@@ -1,7 +1,10 @@
 use std::io::{self, Write};
 use std::net::TcpStream;
 
-use crate::commands::protocol::{build_login_request, build_logout_request, build_send_request};
+use crate::commands::protocol::{
+    build_login_request, build_logout_request, build_send_request, build_user_request,
+    build_users_request,
+};
 use crate::commands::{CommandMap, PendingRequest, SessionState};
 
 fn check_arg_count(command: &str, args: &[String], min: usize, max: usize) -> io::Result<()> {
@@ -68,25 +71,35 @@ pub fn handle_logout(
 }
 
 pub fn handle_users(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/users", args, 0, 0)?;
-    // TODO: request users list from server.
+
+    let request = build_users_request();
+    stream.write_all(request.as_bytes())?;
+
+    state.pending_request = Some(PendingRequest::Users);
     Ok(())
 }
 
 pub fn handle_user(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/user", args, 1, 1)?;
-    let _user_uuid = &args[0];
-    // TODO: request details for the target user.
+
+    let user_uuid = &args[0];
+    let request = build_user_request(user_uuid);
+    stream.write_all(request.as_bytes())?;
+
+    state.pending_request = Some(PendingRequest::User {
+        user_uuid: user_uuid.clone(),
+    });
     Ok(())
 }
 

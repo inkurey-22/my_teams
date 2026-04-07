@@ -2,10 +2,12 @@ use std::io::ErrorKind;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::os::fd::AsRawFd;
 use std::sync::atomic::Ordering;
+use std::ffi::CString;
 
 use super::commands::{
     command_registry, dispatch_line, emit_user_logged_out, InfoEvent, SessionState,
 };
+use super::libsrv;
 use super::notifier;
 use super::signal::SHOULD_STOP;
 use super::storage::{default_teams_path, default_users_path, ServerStorage};
@@ -48,6 +50,21 @@ fn send_response(session: &mut ClientSession, payload: &str) -> bool {
     }
 }
 
+fn emit_loaded_users(users: &UserStore) {
+    for (user_uuid, user_name, _is_online) in users.list_users() {
+        let Ok(uuid_cstr) = CString::new(user_uuid) else {
+            continue;
+        };
+        let Ok(name_cstr) = CString::new(user_name) else {
+            continue;
+        };
+
+        unsafe {
+            let _ = libsrv::server_event_user_loaded(uuid_cstr.as_ptr(), name_cstr.as_ptr());
+        }
+    }
+}
+
 fn accept_pending_clients(listener: &TcpListener, clients: &mut Vec<ClientSession>) {
     loop {
         match listener.accept() {
@@ -82,6 +99,7 @@ fn handle_client(
     match read_lines_nonblocking(&mut session.stream, &mut session.input_buffer) {
         Ok(ReadLinesResult::Disconnected) => {
             if let Some(user_uuid) = session.state.user_uuid.as_deref() {
+                users.logout(user_uuid);
                 emit_user_logged_out(user_uuid);
             }
             session.state.user_uuid = None;
@@ -119,6 +137,7 @@ pub fn run_accept_loop(listener: &TcpListener) {
         };
 
     let mut users = UserStore::from_pairs(storage.user_pairs());
+    emit_loaded_users(&users);
     println!(
         "Using JSON storage files: users={}, teams={}",
         storage.users_file().display(),
@@ -156,6 +175,7 @@ pub fn run_accept_loop(listener: &TcpListener) {
             let revents = poll_fds[index + 1].revents;
             if revents & (POLLERR | POLLHUP | POLLNVAL) != 0 {
                 if let Some(user_uuid) = session.state.user_uuid.as_deref() {
+                    users.logout(user_uuid);
                     emit_user_logged_out(user_uuid);
                 }
                 let _ = session.stream.shutdown(Shutdown::Both);
@@ -188,6 +208,7 @@ pub fn run_accept_loop(listener: &TcpListener) {
 
     for session in clients {
         if let Some(user_uuid) = session.state.user_uuid.as_deref() {
+            users.logout(user_uuid);
             emit_user_logged_out(user_uuid);
         }
         let _ = session.stream.shutdown(Shutdown::Both);

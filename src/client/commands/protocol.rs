@@ -12,6 +12,14 @@ pub fn build_logout_request() -> String {
     "C100 LOGOUT\r\n".to_string()
 }
 
+pub fn build_users_request() -> String {
+    "C100 USERS\r\n".to_string()
+}
+
+pub fn build_user_request(user_uuid: &str) -> String {
+    format!("C100 USER \"{}\"\r\n", quote_net_argument(user_uuid))
+}
+
 pub fn build_send_request(user_uuid: &str, message_body: &str) -> String {
     format!(
         "C100 SEND \"{}\" \"{}\"\r\n",
@@ -42,31 +50,13 @@ pub fn parse_response_code(response: &str) -> io::Result<u16> {
 }
 
 pub fn extract_uuid_from_body(response: &str) -> io::Result<String> {
-    let body = response
-        .split_once(' ')
-        .map(|(_, rest)| rest.trim())
-        .unwrap_or("");
-
-    if body.is_empty() {
+    let tokens = parse_response_tokens(response)?;
+    let Some(uuid) = tokens.first() else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "missing UUID in login response",
         ));
-    }
-
-    if let Some(start) = body.find('"') {
-        let tail = &body[start + 1..];
-        if let Some(end) = tail.find('"') {
-            let uuid = &tail[..end];
-            if !uuid.is_empty() {
-                return Ok(uuid.to_string());
-            }
-        }
-    }
-
-    let uuid = body.split_whitespace().next().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, "missing UUID in login response")
-    })?;
+    };
 
     Ok(uuid.to_string())
 }
@@ -112,6 +102,19 @@ fn tokenize_body(input: &str) -> io::Result<Vec<String>> {
     }
 
     Ok(tokens)
+}
+
+pub fn parse_response_tokens(response: &str) -> io::Result<Vec<String>> {
+    let body = response
+        .split_once(' ')
+        .map(|(_, rest)| rest.trim())
+        .unwrap_or("");
+
+    if body.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    tokenize_body(body)
 }
 
 pub fn parse_new_message_info(line: &str) -> io::Result<Option<(String, String)>> {
