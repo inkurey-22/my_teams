@@ -2,6 +2,19 @@ use std::collections::HashMap;
 use std::io;
 use std::net::TcpStream;
 
+#[derive(Clone)]
+pub enum PendingRequest {
+    Login {
+        user_name: String,
+    },
+    Logout,
+    Send {
+        user_uuid: String,
+        #[allow(dead_code)]
+        message_body: String,
+    },
+}
+
 #[derive(Default)]
 pub struct CommandContext {
     pub team_uuid: Option<String>,
@@ -10,16 +23,17 @@ pub struct CommandContext {
 }
 
 #[derive(Default)]
-pub struct ShellState {
+pub struct SessionState {
     pub user_name: Option<String>,
     pub user_uuid: Option<String>,
     pub context: CommandContext,
+    pub pending_request: Option<PendingRequest>,
 }
 
 pub type CommandMap = HashMap<&'static str, CommandDefinition>;
 
 pub type CommandHandler =
-    fn(&mut ShellState, &CommandMap, &mut TcpStream, &[String]) -> io::Result<()>;
+    fn(&mut SessionState, &CommandMap, &mut TcpStream, &[String]) -> io::Result<()>;
 
 pub struct CommandDefinition {
     pub usage: &'static str,

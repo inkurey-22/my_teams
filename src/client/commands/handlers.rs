@@ -1,12 +1,8 @@
-use std::ffi::CString;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, Write};
 use std::net::TcpStream;
 
-use crate::commands::protocol::{
-    build_login_request, build_logout_request, extract_uuid_from_body, parse_response_code,
-};
-use crate::commands::{CommandMap, ShellState};
-use crate::libcli;
+use crate::commands::protocol::{build_login_request, build_logout_request, build_send_request};
+use crate::commands::{CommandMap, PendingRequest, SessionState};
 
 fn check_arg_count(command: &str, args: &[String], min: usize, max: usize) -> io::Result<()> {
     if args.len() < min || args.len() > max {
@@ -19,7 +15,7 @@ fn check_arg_count(command: &str, args: &[String], min: usize, max: usize) -> io
 }
 
 pub fn handle_help(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -37,7 +33,7 @@ pub fn handle_help(
 }
 
 pub fn handle_login(
-    state: &mut ShellState,
+    state: &mut SessionState,
     _registry: &CommandMap,
     stream: &mut TcpStream,
     args: &[String],
@@ -48,55 +44,15 @@ pub fn handle_login(
     let request = build_login_request(user_name);
     stream.write_all(request.as_bytes())?;
 
-    let mut response = String::new();
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let bytes_read = reader.read_line(&mut response)?;
-    if bytes_read == 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "server closed connection while waiting for login response",
-        ));
-    }
-
-    let response = response.trim_end_matches(['\r', '\n']);
-    let code = parse_response_code(response)?;
-
-    if code == 401 {
-        unsafe {
-            let _ = libcli::client_error_unauthorized();
-        }
-        return Ok(());
-    }
-
-    if code != 200 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            response.to_string(),
-        ));
-    }
-
-    let user_uuid = extract_uuid_from_body(response)?;
-    state.user_name = Some(user_name.clone());
-    state.user_uuid = Some(user_uuid.clone());
-
-    let user_uuid_cstr = CString::new(user_uuid)
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "user UUID contains null byte"))?;
-    let user_name_cstr = CString::new(user_name.as_str()).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "user name contains an invalid NUL byte",
-        )
-    })?;
-
-    unsafe {
-        let _ = libcli::client_event_logged_in(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
-    }
+    state.pending_request = Some(PendingRequest::Login {
+        user_name: user_name.clone(),
+    });
 
     Ok(())
 }
 
 pub fn handle_logout(
-    state: &mut ShellState,
+    state: &mut SessionState,
     _registry: &CommandMap,
     stream: &mut TcpStream,
     args: &[String],
@@ -106,58 +62,13 @@ pub fn handle_logout(
     let request = build_logout_request();
     stream.write_all(request.as_bytes())?;
 
-    let mut response = String::new();
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let bytes_read = reader.read_line(&mut response)?;
-    if bytes_read == 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::UnexpectedEof,
-            "server closed connection while waiting for logout response",
-        ));
-    }
-
-    let response = response.trim_end_matches(['\r', '\n']);
-    let code = parse_response_code(response)?;
-
-    if code == 401 {
-        unsafe {
-            let _ = libcli::client_error_unauthorized();
-        }
-        return Ok(());
-    }
-
-    if code != 200 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            response.to_string(),
-        ));
-    }
-
-    let user_uuid = state.user_uuid.take();
-    let user_name = state.user_name.take();
-
-    if let (Some(user_uuid), Some(user_name)) = (user_uuid, user_name) {
-        let user_uuid_cstr = CString::new(user_uuid).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidData, "user UUID contains null byte")
-        })?;
-        let user_name_cstr = CString::new(user_name).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "user name contains an invalid NUL byte",
-            )
-        })?;
-
-        unsafe {
-            let _ =
-                libcli::client_event_logged_out(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
-        }
-    }
+    state.pending_request = Some(PendingRequest::Logout);
 
     Ok(())
 }
 
 pub fn handle_users(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -168,7 +79,7 @@ pub fn handle_users(
 }
 
 pub fn handle_user(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -180,20 +91,28 @@ pub fn handle_user(
 }
 
 pub fn handle_send(
-    _state: &mut ShellState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/send", args, 2, 2)?;
-    let _user_uuid = &args[0];
-    let _message_body = &args[1];
-    // TODO: send private message to user.
+
+    let user_uuid = &args[0];
+    let message_body = &args[1];
+    let request = build_send_request(user_uuid, message_body);
+    stream.write_all(request.as_bytes())?;
+
+    state.pending_request = Some(PendingRequest::Send {
+        user_uuid: user_uuid.clone(),
+        message_body: message_body.clone(),
+    });
+
     Ok(())
 }
 
 pub fn handle_messages(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -205,7 +124,7 @@ pub fn handle_messages(
 }
 
 pub fn handle_subscribe(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -217,7 +136,7 @@ pub fn handle_subscribe(
 }
 
 pub fn handle_subscribed(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -229,7 +148,7 @@ pub fn handle_subscribed(
 }
 
 pub fn handle_unsubscribe(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -241,7 +160,7 @@ pub fn handle_unsubscribe(
 }
 
 pub fn handle_use(
-    state: &mut ShellState,
+    state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -257,7 +176,7 @@ pub fn handle_use(
 }
 
 pub fn handle_create(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -268,7 +187,7 @@ pub fn handle_create(
 }
 
 pub fn handle_list(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],
@@ -279,7 +198,7 @@ pub fn handle_list(
 }
 
 pub fn handle_info(
-    _state: &mut ShellState,
+    _state: &mut SessionState,
     _registry: &CommandMap,
     _stream: &mut TcpStream,
     args: &[String],

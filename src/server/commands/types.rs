@@ -8,10 +8,34 @@ pub struct SessionState {
     pub user_uuid: Option<String>,
 }
 
+pub struct InfoEvent {
+    pub recipient_user_uuid: String,
+    pub payload: String,
+}
+
+pub struct CommandOutcome {
+    pub response: String,
+    pub info_events: Vec<InfoEvent>,
+}
+
+impl CommandOutcome {
+    pub fn response_only(response: String) -> Self {
+        Self {
+            response,
+            info_events: Vec::new(),
+        }
+    }
+}
+
 pub type CommandMap = HashMap<&'static str, CommandDefinition>;
 
-pub type CommandHandler =
-    fn(&mut SessionState, &CommandMap, &mut UserStore, &mut ServerStorage, &[String]) -> String;
+pub type CommandHandler = fn(
+    &mut SessionState,
+    &CommandMap,
+    &mut UserStore,
+    &mut ServerStorage,
+    &[String],
+) -> CommandOutcome;
 
 pub struct CommandDefinition {
     pub usage: &'static str,
