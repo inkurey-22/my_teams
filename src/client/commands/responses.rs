@@ -17,6 +17,15 @@ fn parse_status(status: &str) -> io::Result<c_int> {
     }
 }
 
+fn parse_timestamp(timestamp: &str) -> io::Result<libcli::TimeT> {
+    timestamp.parse::<libcli::TimeT>().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid message timestamp: {}", timestamp),
+        )
+    })
+}
+
 pub fn handle_response_line(state: &mut SessionState, response: &str) -> io::Result<()> {
     let code = parse_response_code(response)?;
     let pending_request = state.pending_request.take();
@@ -221,6 +230,67 @@ pub fn handle_response_line(state: &mut SessionState, response: &str) -> io::Res
                     io::ErrorKind::InvalidData,
                     response.to_string(),
                 ));
+            }
+        }
+        Some(PendingRequest::Messages { user_uuid }) => {
+            if code == 401 {
+                unsafe {
+                    let _ = libcli::client_error_unauthorized();
+                }
+                return Ok(());
+            }
+
+            if code == 404 {
+                let target_cstr = CString::new(user_uuid.as_str()).map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "target user UUID contains an invalid NUL byte",
+                    )
+                })?;
+                unsafe {
+                    let _ = libcli::client_error_unknown_user(target_cstr.as_ptr());
+                }
+                return Ok(());
+            }
+
+            if code != 200 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    response.to_string(),
+                ));
+            }
+
+            let tokens = parse_response_tokens(response)?;
+            if tokens.first().map(|t| t.as_str()) != Some("MESSAGES") {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid MESSAGES response payload",
+                ));
+            }
+
+            if (tokens.len() - 1) % 3 != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid MESSAGES response entry count",
+                ));
+            }
+
+            for entry in tokens[1..].chunks(3) {
+                let sender_uuid_cstr = CString::new(entry[0].as_str()).map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "user UUID contains null byte")
+                })?;
+                let timestamp = parse_timestamp(&entry[1])?;
+                let message_body_cstr = CString::new(entry[2].as_str()).map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "message body contains null byte")
+                })?;
+
+                unsafe {
+                    let _ = libcli::client_private_message_print_messages(
+                        sender_uuid_cstr.as_ptr(),
+                        timestamp,
+                        message_body_cstr.as_ptr(),
+                    );
+                }
             }
         }
         None => {

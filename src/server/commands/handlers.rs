@@ -1,4 +1,5 @@
 use std::ffi::CString;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::commands::{CommandMap, CommandOutcome, InfoEvent, SessionState};
 use crate::libsrv;
@@ -16,6 +17,13 @@ fn not_found() -> String {
 
 fn unknown_user(user_uuid: &str) -> String {
     response(404, Some(&quoted(user_uuid)))
+}
+
+fn now_unix_timestamp() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 fn validate_arg_count(args: &[String], min: usize, max: usize) -> Result<(), String> {
@@ -180,7 +188,7 @@ pub fn handle_send(
     state: &mut SessionState,
     _registry: &CommandMap,
     users: &mut UserStore,
-    _storage: &mut ServerStorage,
+    storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
     if validate_arg_count(args, 2, 2).is_err() || args[0].is_empty() {
@@ -193,9 +201,17 @@ pub fn handle_send(
 
     let recipient_uuid = &args[0];
     let message_body = &args[1];
+    let timestamp = now_unix_timestamp();
 
     if !users.exists_uuid(recipient_uuid) {
         return CommandOutcome::response_only(unknown_user(recipient_uuid));
+    }
+
+    if let Err(err) =
+        storage.append_private_message(sender_uuid, recipient_uuid, timestamp, message_body)
+    {
+        eprintln!("Failed to persist private message: {}", err);
+        return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
     }
 
     let Ok(sender_cstr) = CString::new(sender_uuid) else {
@@ -232,16 +248,33 @@ pub fn handle_send(
 }
 
 pub fn handle_messages(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
-    _storage: &mut ServerStorage,
+    users: &mut UserStore,
+    storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
         return CommandOutcome::response_only(bad_request());
     }
-    CommandOutcome::response_only(not_found())
+
+    let Some(requester_uuid) = state.user_uuid.as_deref() else {
+        return CommandOutcome::response_only(response(401, Some("\"unauthorized\"")));
+    };
+
+    let other_user_uuid = &args[0];
+    if !users.exists_uuid(other_user_uuid) {
+        return CommandOutcome::response_only(unknown_user(other_user_uuid));
+    }
+
+    let mut chunks = vec![quoted("MESSAGES")];
+    for message in storage.conversation_messages(requester_uuid, other_user_uuid) {
+        chunks.push(quoted(&message.sender_uuid));
+        chunks.push(quoted(&message.timestamp.to_string()));
+        chunks.push(quoted(&message.body));
+    }
+
+    CommandOutcome::response_only(response(200, Some(&chunks.join(" "))))
 }
 
 pub fn handle_subscribe(
@@ -361,7 +394,8 @@ mod tests {
             let root = std::env::temp_dir().join(unique);
             let users_path = root.join("users.json");
             let teams_path = root.join("teams.json");
-            let storage = ServerStorage::load_or_default(users_path, teams_path)
+            let messages_path = root.join("messages.json");
+            let storage = ServerStorage::load_or_default(users_path, teams_path, messages_path)
                 .expect("test storage should be created");
 
             Self { storage, root }
@@ -480,5 +514,133 @@ mod tests {
         );
 
         assert_eq!(outcome.response, "R501 \"bad request\"\r\n");
+    }
+
+    #[test]
+    fn send_command_persists_message_and_emits_info_event() {
+        let mut state = SessionState {
+            user_uuid: Some("uuid-alice".to_string()),
+        };
+        let registry = CommandMap::new();
+        let mut users = UserStore::from_pairs(vec![
+            ("alice".to_string(), "uuid-alice".to_string()),
+            ("bob".to_string(), "uuid-bob".to_string()),
+        ]);
+        let mut test_storage = TestStorage::new();
+
+        let outcome = handle_send(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["uuid-bob".to_string(), "hello bob".to_string()],
+        );
+
+        assert_eq!(outcome.response, "R200\r\n");
+        assert_eq!(outcome.info_events.len(), 1);
+        assert_eq!(outcome.info_events[0].recipient_user_uuid, "uuid-bob");
+        assert_eq!(
+            outcome.info_events[0].payload,
+            "I100 NEW_MESSAGE \"uuid-alice\" \"hello bob\"\r\n"
+        );
+
+        let conversation = test_storage
+            .storage
+            .conversation_messages("uuid-alice", "uuid-bob");
+        assert_eq!(conversation.len(), 1);
+        assert_eq!(conversation[0].sender_uuid, "uuid-alice");
+        assert_eq!(conversation[0].recipient_uuid, "uuid-bob");
+        assert_eq!(conversation[0].body, "hello bob");
+    }
+
+    #[test]
+    fn send_command_rejects_unauthorized_user() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::from_pairs(vec![(
+            "bob".to_string(),
+            "uuid-bob".to_string(),
+        )]);
+        let mut test_storage = TestStorage::new();
+
+        let outcome = handle_send(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["uuid-bob".to_string(), "hello".to_string()],
+        );
+
+        assert_eq!(outcome.response, "R401 \"unauthorized\"\r\n");
+        assert!(outcome.info_events.is_empty());
+        assert!(
+            test_storage
+                .storage
+                .conversation_messages("uuid-alice", "uuid-bob")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn messages_command_returns_bidirectional_history() {
+        let mut state = SessionState {
+            user_uuid: Some("uuid-alice".to_string()),
+        };
+        let registry = CommandMap::new();
+        let mut users = UserStore::from_pairs(vec![
+            ("alice".to_string(), "uuid-alice".to_string()),
+            ("bob".to_string(), "uuid-bob".to_string()),
+            ("carol".to_string(), "uuid-carol".to_string()),
+        ]);
+        let mut test_storage = TestStorage::new();
+
+        test_storage
+            .storage
+            .append_private_message("uuid-alice", "uuid-bob", 10, "a->b")
+            .expect("message should be stored");
+        test_storage
+            .storage
+            .append_private_message("uuid-bob", "uuid-alice", 20, "b->a")
+            .expect("message should be stored");
+        test_storage
+            .storage
+            .append_private_message("uuid-carol", "uuid-bob", 30, "ignored")
+            .expect("message should be stored");
+
+        let outcome = handle_messages(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["uuid-bob".to_string()],
+        );
+
+        assert_eq!(
+            outcome.response,
+            "R200 \"MESSAGES\" \"uuid-alice\" \"10\" \"a->b\" \"uuid-bob\" \"20\" \"b->a\"\r\n"
+        );
+        assert!(outcome.info_events.is_empty());
+    }
+
+    #[test]
+    fn messages_command_rejects_unauthorized_user() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::from_pairs(vec![(
+            "bob".to_string(),
+            "uuid-bob".to_string(),
+        )]);
+        let mut test_storage = TestStorage::new();
+
+        let outcome = handle_messages(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["uuid-bob".to_string()],
+        );
+
+        assert_eq!(outcome.response, "R401 \"unauthorized\"\r\n");
+        assert!(outcome.info_events.is_empty());
     }
 }

@@ -28,6 +28,10 @@ pub fn build_send_request(user_uuid: &str, message_body: &str) -> String {
     )
 }
 
+pub fn build_messages_request(user_uuid: &str) -> String {
+    format!("C100 MESSAGES \"{}\"\r\n", quote_net_argument(user_uuid))
+}
+
 pub fn parse_response_code(response: &str) -> io::Result<u16> {
     let header = response
         .split_whitespace()

@@ -10,7 +10,9 @@ use super::commands::{
 use super::libsrv;
 use super::notifier;
 use super::signal::SHOULD_STOP;
-use super::storage::{default_teams_path, default_users_path, ServerStorage};
+use super::storage::{
+    default_messages_path, default_teams_path, default_users_path, ServerStorage,
+};
 use super::transport::{read_lines_nonblocking, write_nonblocking, ReadLinesResult};
 use super::users::UserStore;
 use crate::poll::{wait as poll_wait, PollFd, POLLERR, POLLHUP, POLLIN, POLLNVAL};
@@ -127,21 +129,25 @@ fn handle_client(
 pub fn run_accept_loop(listener: &TcpListener) {
     let mut clients: Vec<ClientSession> = Vec::new();
     let commands = command_registry();
-    let mut storage =
-        match ServerStorage::load_or_default(default_users_path(), default_teams_path()) {
+    let mut storage = match ServerStorage::load_or_default(
+        default_users_path(),
+        default_teams_path(),
+        default_messages_path(),
+    ) {
             Ok(storage) => storage,
             Err(err) => {
                 eprintln!("Failed to initialize JSON storage: {}", err);
                 std::process::exit(1);
             }
-        };
+    };
 
     let mut users = UserStore::from_pairs(storage.user_pairs());
     emit_loaded_users(&users);
     println!(
-        "Using JSON storage files: users={}, teams={}",
+        "Using JSON storage files: users={}, teams={}, messages={}",
         storage.users_file().display(),
-        storage.teams_file().display()
+        storage.teams_file().display(),
+        storage.messages_file().display()
     );
 
     while !SHOULD_STOP.load(Ordering::SeqCst) {
