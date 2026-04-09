@@ -112,7 +112,7 @@ pub fn handle_login(
 pub fn handle_logout(
     state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
@@ -121,6 +121,7 @@ pub fn handle_logout(
     }
 
     if let Some(user_uuid) = state.user_uuid.take() {
+        users.logout(&user_uuid);
         emit_user_logged_out(&user_uuid);
     }
 
@@ -130,27 +131,49 @@ pub fn handle_logout(
 pub fn handle_users(
     _state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
     if validate_arg_count(args, 0, 0).is_err() {
         return CommandOutcome::response_only(bad_request());
     }
-    CommandOutcome::response_only(not_found())
+
+    let mut chunks = vec![quoted("USERS")];
+    for (user_uuid, user_name, is_online) in users.list_users() {
+        chunks.push(quoted(&user_uuid));
+        chunks.push(quoted(&user_name));
+        chunks.push(quoted(if is_online { "1" } else { "0" }));
+    }
+
+    CommandOutcome::response_only(response(200, Some(&chunks.join(" "))))
 }
 
 pub fn handle_user(
     _state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     _storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
     if validate_arg_count(args, 1, 1).is_err() {
         return CommandOutcome::response_only(bad_request());
     }
-    CommandOutcome::response_only(not_found())
+
+    let user_uuid = &args[0];
+    let Some((user_name, is_online)) = users.user_details(user_uuid) else {
+        return CommandOutcome::response_only(unknown_user(user_uuid));
+    };
+
+    let body = [
+        quoted("USER"),
+        quoted(user_uuid),
+        quoted(&user_name),
+        quoted(if is_online { "1" } else { "0" }),
+    ]
+    .join(" ");
+
+    CommandOutcome::response_only(response(200, Some(&body)))
 }
 
 pub fn handle_send(
@@ -310,4 +333,152 @@ pub fn handle_info(
         return CommandOutcome::response_only(bad_request());
     }
     CommandOutcome::response_only(not_found())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestStorage {
+        storage: ServerStorage,
+        root: PathBuf,
+    }
+
+    impl TestStorage {
+        fn new() -> Self {
+            let unique = format!(
+                "my_teams_handlers_{}_{}",
+                process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            );
+
+            let root = std::env::temp_dir().join(unique);
+            let users_path = root.join("users.json");
+            let teams_path = root.join("teams.json");
+            let storage = ServerStorage::load_or_default(users_path, teams_path)
+                .expect("test storage should be created");
+
+            Self { storage, root }
+        }
+    }
+
+    impl Drop for TestStorage {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn users_command_lists_all_users_with_online_flags() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::from_pairs(vec![
+            ("alice".to_string(), "uuid-alice".to_string()),
+            ("bob".to_string(), "uuid-bob".to_string()),
+        ]);
+        let mut test_storage = TestStorage::new();
+
+        let _ = users.login("alice");
+
+        let outcome = handle_users(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &[],
+        );
+
+        assert_eq!(
+            outcome.response,
+            "R200 \"USERS\" \"uuid-alice\" \"alice\" \"1\" \"uuid-bob\" \"bob\" \"0\"\r\n"
+        );
+        assert!(outcome.info_events.is_empty());
+    }
+
+    #[test]
+    fn users_command_rejects_unexpected_arguments() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::default();
+        let mut test_storage = TestStorage::new();
+
+        let outcome = handle_users(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["extra".to_string()],
+        );
+
+        assert_eq!(outcome.response, "R501 \"bad request\"\r\n");
+    }
+
+    #[test]
+    fn user_command_returns_user_details() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::from_pairs(vec![(
+            "alice".to_string(),
+            "uuid-alice".to_string(),
+        )]);
+        let mut test_storage = TestStorage::new();
+
+        let _ = users.login("alice");
+
+        let outcome = handle_user(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["uuid-alice".to_string()],
+        );
+
+        assert_eq!(
+            outcome.response,
+            "R200 \"USER\" \"uuid-alice\" \"alice\" \"1\"\r\n"
+        );
+        assert!(outcome.info_events.is_empty());
+    }
+
+    #[test]
+    fn user_command_returns_not_found_for_unknown_uuid() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::default();
+        let mut test_storage = TestStorage::new();
+
+        let outcome = handle_user(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &["missing-uuid".to_string()],
+        );
+
+        assert_eq!(outcome.response, "R404 \"missing-uuid\"\r\n");
+    }
+
+    #[test]
+    fn user_command_rejects_wrong_argument_count() {
+        let mut state = SessionState::default();
+        let registry = CommandMap::new();
+        let mut users = UserStore::default();
+        let mut test_storage = TestStorage::new();
+
+        let outcome = handle_user(
+            &mut state,
+            &registry,
+            &mut users,
+            &mut test_storage.storage,
+            &[],
+        );
+
+        assert_eq!(outcome.response, "R501 \"bad request\"\r\n");
+    }
 }

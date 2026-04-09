@@ -8,6 +8,10 @@ pub enum PendingRequest {
         user_name: String,
     },
     Logout,
+    Users,
+    User {
+        user_uuid: String,
+    },
     Send {
         user_uuid: String,
         #[allow(dead_code)]

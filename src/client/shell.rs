@@ -66,19 +66,20 @@ fn read_socket_messages(stream: &mut TcpStream, buffer: &mut String) -> io::Resu
     Ok(messages)
 }
 
-fn process_socket_message(state: &mut SessionState, message: &str) -> io::Result<()> {
+fn process_socket_message(state: &mut SessionState, message: &str) {
     if message.starts_with('I') {
+        println!("{}", message);
         handle_info_message(message);
-        return Ok(());
+        return;
     }
 
     if message.starts_with('R') {
-        handle_response_line(state, message)?;
         println!("{}", message);
-        return Ok(());
+        if let Err(err) = handle_response_line(state, message) {
+            eprintln!("failed to handle server response: {}", err);
+        }
+        return;
     }
-
-    Ok(())
 }
 
 fn process_pending_input(
@@ -181,10 +182,7 @@ pub fn run_shell(stream: &mut TcpStream) {
             match read_socket_messages(stream, &mut socket_buffer) {
                 Ok(messages) => {
                     for message in messages {
-                        if let Err(err) = process_socket_message(&mut state, &message) {
-                            eprintln!("failed to handle server response: {}", err);
-                            break;
-                        }
+                        process_socket_message(&mut state, &message);
                         let _ = print_prompt();
                     }
                 }
