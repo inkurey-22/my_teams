@@ -17,6 +17,9 @@ pub enum PendingRequest {
         #[allow(dead_code)]
         message_body: String,
     },
+    Messages {
+        user_uuid: String,
+    },
 }
 
 #[derive(Default)]

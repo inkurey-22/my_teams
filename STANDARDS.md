@@ -130,21 +130,91 @@ CLI ```/unsubscribe "[team_uuid]"```
 NET ```C100 <SP> UNSUBSCRIBE <SP> "[team_uuid]" <CRLF>```  
 
 use : Sets the command context to a team/channel/thread  
-CLI ```/use ?"[location_uuid]"```  
-NET ```C100 <SP> USE <SP> "[location_uuid]" <CRLF>```  
+CLI ```/use ?"[team_uuid]" ?"[channel_uuid]" ?"[thread_uuid]"```  
+NET ```C100 <SP> USE <SP> "[team_uuid]" <SP> "[channel_uuid]" <SP> "[thread_uuid]" <CRLF>```  
+NET ```C100 <SP> USE <SP> "[team_uuid]" <SP> "[channel_uuid]" <CRLF>```  
+NET ```C100 <SP> USE <SP> "[team_uuid]" <CRLF>```  
 NET ```C100 <SP> USE <CRLF>```  
 
 create : based on the context, create the sub resource  
 CLI ```/create```  
-NET ```C100 <SP> CREATE <CRLF>```  
+NET : context-dependent (see section below)  
 
 list : based on the context, list all the sub resources  
 CLI ```/list```  
-NET ```C100 <SP> LIST <SP> "[location_uuid]" <CRLF>```  
+NET : context-dependent (see section below)  
 
 info : based on the context, display details of the current resource  
 CLI ```/info```  
-NET ```C100 <SP> INFO <CRLF>```  
+NET : context-dependent (see section below)  
+
+### Context-dependent behavior
+
+#### /create
+
+When the context is not defined (``/use``):
+CLI ```/create "[team_name]" "[team_description]"```  
+NET ```C100 <SP> CREATE_TEAM <SP> "[team_name]" <SP> "[team_description]" <CRLF>```  
+Meaning: create a new team.
+
+When ``team_uuid`` is defined (``/use "team_uuid"``):
+CLI ```/create "[channel_name]" "[channel_description]"```  
+NET ```C100 <SP> CREATE_CHAN <SP> "[channel_name]" <SP> "[channel_description]" <CRLF>```  
+Meaning: create a new channel.
+
+When ``team_uuid`` and ``channel_uuid`` are defined (``/use "team_uuid" "channel_uuid"``):
+CLI ```/create "[thread_title]" "[thread_message]"```  
+NET ```C100 <SP> CREATE_THREAD <SP> "[thread_title]" <SP> "[thread_message]" <CRLF>```  
+Meaning: create a new thread.
+
+When ``team_uuid``, ``channel_uuid`` and ``thread_uuid`` are defined (``/use "team_uuid" "channel_uuid" "thread_uuid"``):
+CLI ```/create "[comment_body]"```  
+NET ```C100 <SP> CREATE_REP <SP> "[comment_body]" <CRLF>```  
+Meaning: create a new reply.
+
+#### /list
+
+When the context is not defined (``/use``):
+CLI ```/list```  
+NET ```C100 <SP> LIST_TEAMS <CRLF>```  
+Meaning: list all existing teams.
+
+When ``team_uuid`` is defined (``/use "team_uuid"``):
+CLI ```/list```  
+NET ```C100 <SP> LIST_CHANS <CRLF>```  
+Meaning: list all existing channels.
+
+When ``team_uuid`` and ``channel_uuid`` are defined (``/use "team_uuid" "channel_uuid"``):
+CLI ```/list```  
+NET ```C100 <SP> LIST_THREADS <CRLF>```  
+Meaning: list all existing threads.
+
+When ``team_uuid``, ``channel_uuid`` and ``thread_uuid`` are defined (``/use "team_uuid" "channel_uuid" "thread_uuid"``):
+CLI ```/list```  
+NET ```C100 <SP> LIST_REPS <CRLF>```  
+Meaning: list all existing replies.
+
+#### /info
+
+When the context is not defined (``/use``):
+CLI ```/info```  
+NET ```C100 <SP> INFO_USER <CRLF>```  
+Meaning: display currently logged-in user details.
+
+When ``team_uuid`` is defined (``/use "team_uuid"``):
+CLI ```/info```  
+NET ```C100 <SP> INFO_TEAM <CRLF>```  
+Meaning: display currently selected team details.
+
+When ``team_uuid`` and ``channel_uuid`` are defined (``/use "team_uuid" "channel_uuid"``):
+CLI ```/info```  
+NET ```C100 <SP> INFO_CHAN <CRLF>```  
+Meaning: display currently selected channel details.
+
+When ``team_uuid``, ``channel_uuid`` and ``thread_uuid`` are defined (``/use "team_uuid" "channel_uuid" "thread_uuid"``):
+CLI ```/info```  
+NET ```C100 <SP> INFO_THREAD <CRLF>```  
+Meaning: display currently selected thread detail.
 
 ### Response messages sent by the server to the client
 

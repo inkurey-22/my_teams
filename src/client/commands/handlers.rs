@@ -2,8 +2,8 @@ use std::io::{self, Write};
 use std::net::TcpStream;
 
 use crate::commands::protocol::{
-    build_login_request, build_logout_request, build_send_request, build_user_request,
-    build_users_request,
+    build_login_request, build_logout_request, build_messages_request, build_send_request,
+    build_user_request, build_users_request,
 };
 use crate::commands::{CommandMap, PendingRequest, SessionState};
 
@@ -125,14 +125,21 @@ pub fn handle_send(
 }
 
 pub fn handle_messages(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/messages", args, 1, 1)?;
-    let _user_uuid = &args[0];
-    // TODO: request message history with user.
+
+    let user_uuid = &args[0];
+    let request = build_messages_request(user_uuid);
+    stream.write_all(request.as_bytes())?;
+
+    state.pending_request = Some(PendingRequest::Messages {
+        user_uuid: user_uuid.clone(),
+    });
+
     Ok(())
 }
 

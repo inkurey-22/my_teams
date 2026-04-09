@@ -16,6 +16,14 @@ pub struct UserEntry {
 }
 
 #[derive(Debug, Clone)]
+pub struct MessageEntry {
+    pub sender_uuid: String,
+    pub recipient_uuid: String,
+    pub timestamp: i64,
+    pub body: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ThreadEntry {
     pub uuid: String,
     pub title: String,
@@ -75,21 +83,30 @@ impl From<JsonIoError> for StorageError {
 pub struct ServerStorage {
     users_path: PathBuf,
     teams_path: PathBuf,
+    messages_path: PathBuf,
     users: Vec<UserEntry>,
     team_tree: TeamTree,
+    messages: Vec<MessageEntry>,
 }
 
 impl ServerStorage {
-    pub fn load_or_default<P1, P2>(users_path: P1, teams_path: P2) -> Result<Self, StorageError>
+    pub fn load_or_default<P1, P2, P3>(
+        users_path: P1,
+        teams_path: P2,
+        messages_path: P3,
+    ) -> Result<Self, StorageError>
     where
         P1: AsRef<Path>,
         P2: AsRef<Path>,
+        P3: AsRef<Path>,
     {
         let users_path = users_path.as_ref().to_path_buf();
         let teams_path = teams_path.as_ref().to_path_buf();
+        let messages_path = messages_path.as_ref().to_path_buf();
 
         ensure_parent_dir(&users_path)?;
         ensure_parent_dir(&teams_path)?;
+        ensure_parent_dir(&messages_path)?;
 
         let users = if users_path.exists() {
             parse_users_file(&users_path)?
@@ -103,15 +120,24 @@ impl ServerStorage {
             TeamTree::default()
         };
 
+        let messages = if messages_path.exists() {
+            parse_messages_file(&messages_path)?
+        } else {
+            Vec::new()
+        };
+
         let storage = Self {
             users_path,
             teams_path,
+            messages_path,
             users,
             team_tree,
+            messages,
         };
 
         storage.flush_users()?;
         storage.flush_teams()?;
+        storage.flush_messages()?;
 
         Ok(storage)
     }
@@ -152,6 +178,38 @@ impl ServerStorage {
         &self.teams_path
     }
 
+    pub fn messages_file(&self) -> &Path {
+        &self.messages_path
+    }
+
+    pub fn append_private_message(
+        &mut self,
+        sender_uuid: &str,
+        recipient_uuid: &str,
+        timestamp: i64,
+        body: &str,
+    ) -> Result<(), StorageError> {
+        self.messages.push(MessageEntry {
+            sender_uuid: sender_uuid.to_string(),
+            recipient_uuid: recipient_uuid.to_string(),
+            timestamp,
+            body: body.to_string(),
+        });
+
+        self.flush_messages()
+    }
+
+    pub fn conversation_messages(&self, user_a: &str, user_b: &str) -> Vec<MessageEntry> {
+        self.messages
+            .iter()
+            .filter(|message| {
+                (message.sender_uuid == user_a && message.recipient_uuid == user_b)
+                    || (message.sender_uuid == user_b && message.recipient_uuid == user_a)
+            })
+            .cloned()
+            .collect()
+    }
+
     fn flush_users(&self) -> Result<(), StorageError> {
         let users_json = users_to_json_value(&self.users);
         write_json_value(&self.users_path, &users_json).map_err(StorageError::from)
@@ -160,6 +218,11 @@ impl ServerStorage {
     fn flush_teams(&self) -> Result<(), StorageError> {
         let teams_json = teams_to_json_value(&self.team_tree);
         write_json_value(&self.teams_path, &teams_json).map_err(StorageError::from)
+    }
+
+    fn flush_messages(&self) -> Result<(), StorageError> {
+        let messages_json = messages_to_json_value(&self.messages);
+        write_json_value(&self.messages_path, &messages_json).map_err(StorageError::from)
     }
 }
 
@@ -180,6 +243,11 @@ fn parse_users_file(path: &Path) -> Result<Vec<UserEntry>, StorageError> {
 fn parse_teams_file(path: &Path) -> Result<TeamTree, StorageError> {
     let value = read_json_value(path).map_err(StorageError::from)?;
     teams_from_json_value(&value)
+}
+
+fn parse_messages_file(path: &Path) -> Result<Vec<MessageEntry>, StorageError> {
+    let value = read_json_value(path).map_err(StorageError::from)?;
+    messages_from_json_value(&value)
 }
 
 fn users_to_json_value(users: &[UserEntry]) -> JsonValue {
@@ -316,6 +384,58 @@ fn teams_from_json_value(value: &JsonValue) -> Result<TeamTree, StorageError> {
     Ok(TeamTree { teams })
 }
 
+fn messages_to_json_value(messages: &[MessageEntry]) -> JsonValue {
+    let mut root = JsonObject::new();
+    let mut arr = Vec::with_capacity(messages.len());
+
+    for message in messages {
+        let mut item = JsonObject::new();
+        item.insert(
+            "sender_uuid".to_string(),
+            JsonValue::String(message.sender_uuid.clone()),
+        );
+        item.insert(
+            "recipient_uuid".to_string(),
+            JsonValue::String(message.recipient_uuid.clone()),
+        );
+        item.insert(
+            "timestamp".to_string(),
+            JsonValue::Number(message.timestamp as f64),
+        );
+        item.insert("body".to_string(), JsonValue::String(message.body.clone()));
+        arr.push(JsonValue::Object(item));
+    }
+
+    root.insert("messages".to_string(), JsonValue::Array(arr));
+    JsonValue::Object(root)
+}
+
+fn messages_from_json_value(value: &JsonValue) -> Result<Vec<MessageEntry>, StorageError> {
+    let root = expect_object(value, "messages file root")?;
+    let messages_value = root
+        .get("messages")
+        .ok_or_else(|| StorageError::Schema("missing 'messages' field".to_string()))?;
+    let messages_arr = expect_array(messages_value, "messages")?;
+
+    let mut out = Vec::with_capacity(messages_arr.len());
+    for item in messages_arr {
+        let obj = expect_object(item, "messages[] item")?;
+        let sender_uuid = expect_string_field(obj, "sender_uuid")?.to_string();
+        let recipient_uuid = expect_string_field(obj, "recipient_uuid")?.to_string();
+        let timestamp = expect_i64_field(obj, "timestamp")?;
+        let body = expect_string_field(obj, "body")?.to_string();
+
+        out.push(MessageEntry {
+            sender_uuid,
+            recipient_uuid,
+            timestamp,
+            body,
+        });
+    }
+
+    Ok(out)
+}
+
 fn expect_object<'a>(value: &'a JsonValue, ctx: &str) -> Result<&'a JsonObject, StorageError> {
     match value {
         JsonValue::Object(obj) => Ok(obj),
@@ -343,6 +463,26 @@ fn expect_string_field<'a>(obj: &'a JsonObject, field: &str) -> Result<&'a str, 
     }
 }
 
+fn expect_i64_field(obj: &JsonObject, field: &str) -> Result<i64, StorageError> {
+    let value = obj
+        .get(field)
+        .ok_or_else(|| StorageError::Schema(format!("missing '{field}' field")))?;
+
+    match value {
+        JsonValue::Number(n) if n.is_finite() && n.fract() == 0.0 => {
+            if *n < i64::MIN as f64 || *n > i64::MAX as f64 {
+                return Err(StorageError::Schema(format!(
+                    "field '{field}' is out of i64 range"
+                )));
+            }
+            Ok(*n as i64)
+        }
+        _ => Err(StorageError::Schema(format!(
+            "field '{field}' is not an integer number"
+        ))),
+    }
+}
+
 pub fn default_users_path() -> &'static str {
     "data/users.json"
 }
@@ -351,6 +491,94 @@ pub fn default_teams_path() -> &'static str {
     "data/teams.json"
 }
 
+pub fn default_messages_path() -> &'static str {
+    "data/messages.json"
+}
+
 pub fn dump_team_tree(tree: &TeamTree) -> String {
     stringify_json_value(&teams_to_json_value(tree))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TestPaths {
+        root: PathBuf,
+        users: PathBuf,
+        teams: PathBuf,
+        messages: PathBuf,
+    }
+
+    impl TestPaths {
+        fn new() -> Self {
+            let unique = format!(
+                "my_teams_storage_{}_{}",
+                process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            );
+
+            let root = std::env::temp_dir().join(unique);
+            Self {
+                users: root.join("users.json"),
+                teams: root.join("teams.json"),
+                messages: root.join("messages.json"),
+                root,
+            }
+        }
+    }
+
+    impl Drop for TestPaths {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn append_private_message_is_persisted_on_disk() {
+        let paths = TestPaths::new();
+        let mut storage = ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
+            .expect("storage should initialize");
+
+        storage
+            .append_private_message("uuid-alice", "uuid-bob", 1234, "hello")
+            .expect("message should be persisted");
+
+        let reloaded = ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
+            .expect("storage should reload");
+        let messages = reloaded.conversation_messages("uuid-alice", "uuid-bob");
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].sender_uuid, "uuid-alice");
+        assert_eq!(messages[0].recipient_uuid, "uuid-bob");
+        assert_eq!(messages[0].timestamp, 1234);
+        assert_eq!(messages[0].body, "hello");
+    }
+
+    #[test]
+    fn conversation_messages_only_returns_matching_pair() {
+        let paths = TestPaths::new();
+        let mut storage = ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
+            .expect("storage should initialize");
+
+        storage
+            .append_private_message("uuid-a", "uuid-b", 1, "a->b")
+            .expect("message should be persisted");
+        storage
+            .append_private_message("uuid-b", "uuid-a", 2, "b->a")
+            .expect("message should be persisted");
+        storage
+            .append_private_message("uuid-a", "uuid-c", 3, "a->c")
+            .expect("message should be persisted");
+
+        let conversation = storage.conversation_messages("uuid-a", "uuid-b");
+        assert_eq!(conversation.len(), 2);
+        assert_eq!(conversation[0].body, "a->b");
+        assert_eq!(conversation[1].body, "b->a");
+    }
 }
