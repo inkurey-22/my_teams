@@ -15,7 +15,7 @@ pub fn dispatch_line(
         Err(_) => return CommandOutcome::response_only(response(501, Some("\"bad request\""))),
     };
 
-    if state.user_uuid.is_none() && parsed.name != "LOGIN" {
+    if state.user_uuid.is_none() && parsed.name != "LOGIN" && parsed.name != "USE" {
         return CommandOutcome::response_only(response(401, Some("\"unauthorized\"")));
     }
 
