@@ -156,7 +156,7 @@ Files are created automatically on first run if missing.
 
 ## Protocol reference
 
-The detailed command/message specification is documented in `STANDARDS.md`.
+The detailed command/message specification is documented in [STANDARDS.md](./STANDARDS.md).
 
 High-level framing:
 - Client requests are line-based and end with `\r\n`

@@ -21,7 +21,7 @@ This protocol is designed to be used in a client-server architecture using a bil
 
 The following symbols are used in the message and command formats:
 ```<SP>``` : space character
-```<CRLF>``` : Carriage Return + Line Feed sequence
+```<CRLF>``` : Carriage Return + Line Feed sequence of characters
 
 ---
 
