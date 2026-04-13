@@ -8,6 +8,10 @@ use crate::protocol::{quoted, response};
 use crate::storage::{ChannelEntry, ReplyEntry, ServerStorage, TeamEntry, TeamTree, ThreadEntry};
 use crate::users::UserStore;
 
+pub(crate) const MAX_NAME_LENGTH: usize = 32;
+pub(crate) const MAX_DESCRIPTION_LENGTH: usize = 255;
+pub(crate) const MAX_BODY_LENGTH: usize = 512;
+
 pub(crate) enum ResourceContext {
     Root,
     Team {
@@ -258,6 +262,10 @@ pub(crate) fn validate_arg_count(args: &[String], min: usize, max: usize) -> Res
         return Err(bad_request());
     }
     Ok(())
+}
+
+pub(crate) fn validate_max_len(value: &str, max: usize) -> bool {
+    value.chars().count() <= max
 }
 
 pub(crate) fn team_index_mut<'a>(tree: &'a mut TeamTree, team_uuid: &str) -> Option<&'a mut TeamEntry> {

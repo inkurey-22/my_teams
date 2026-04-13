@@ -7,7 +7,8 @@ use super::shared::{
     bad_request, call_event_channel_created, call_event_reply_created, call_event_team_created,
     call_event_thread_created, channel_index_mut, channel_response, current_context,
     current_user_details, make_uuid_v4_like, now_unix_timestamp, reply_response, team_index_mut,
-    team_response, thread_index_mut, thread_response, validate_arg_count, ResourceContext,
+    team_response, thread_index_mut, thread_response, validate_arg_count, validate_max_len,
+    ResourceContext, MAX_BODY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH,
 };
 
 pub fn handle_create(
@@ -23,7 +24,11 @@ pub fn handle_create(
 
     match current_context(state) {
         Ok(ResourceContext::Root) => {
-            if validate_arg_count(args, 2, 2).is_err() || args.iter().any(|arg| arg.is_empty()) {
+            if validate_arg_count(args, 2, 2).is_err()
+                || args.iter().any(|arg| arg.is_empty())
+                || !validate_max_len(&args[0], MAX_NAME_LENGTH)
+                || !validate_max_len(&args[1], MAX_DESCRIPTION_LENGTH)
+            {
                 return CommandOutcome::response_only(bad_request());
             }
 
@@ -46,7 +51,11 @@ pub fn handle_create(
             CommandOutcome::response_only(response(200, Some(&team_response(&team))))
         }
         Ok(ResourceContext::Team { team_uuid }) => {
-            if validate_arg_count(args, 2, 2).is_err() || args.iter().any(|arg| arg.is_empty()) {
+            if validate_arg_count(args, 2, 2).is_err()
+                || args.iter().any(|arg| arg.is_empty())
+                || !validate_max_len(&args[0], MAX_NAME_LENGTH)
+                || !validate_max_len(&args[1], MAX_DESCRIPTION_LENGTH)
+            {
                 return CommandOutcome::response_only(bad_request());
             }
 
@@ -79,7 +88,11 @@ pub fn handle_create(
             team_uuid,
             channel_uuid,
         }) => {
-            if validate_arg_count(args, 2, 2).is_err() || args.iter().any(|arg| arg.is_empty()) {
+            if validate_arg_count(args, 2, 2).is_err()
+                || args.iter().any(|arg| arg.is_empty())
+                || !validate_max_len(&args[0], MAX_NAME_LENGTH)
+                || !validate_max_len(&args[1], MAX_BODY_LENGTH)
+            {
                 return CommandOutcome::response_only(bad_request());
             }
 
@@ -122,7 +135,10 @@ pub fn handle_create(
             channel_uuid,
             thread_uuid,
         }) => {
-            if validate_arg_count(args, 1, 1).is_err() || args[0].is_empty() {
+            if validate_arg_count(args, 1, 1).is_err()
+                || args[0].is_empty()
+                || !validate_max_len(&args[0], MAX_BODY_LENGTH)
+            {
                 return CommandOutcome::response_only(bad_request());
             }
 

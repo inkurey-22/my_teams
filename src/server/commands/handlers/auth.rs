@@ -6,7 +6,7 @@ use crate::users::UserStore;
 use super::shared::{
     bad_request, call_event_private_message_sended, call_event_user_created,
     call_event_user_logged_in, emit_user_logged_out, now_unix_timestamp, unknown_user,
-    validate_arg_count,
+    validate_arg_count, validate_max_len, MAX_BODY_LENGTH, MAX_NAME_LENGTH,
 };
 
 pub fn handle_help(
@@ -41,7 +41,10 @@ pub fn handle_login(
     storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
-    if validate_arg_count(args, 1, 1).is_err() || args[0].is_empty() {
+    if validate_arg_count(args, 1, 1).is_err()
+        || args[0].is_empty()
+        || !validate_max_len(&args[0], MAX_NAME_LENGTH)
+    {
         return CommandOutcome::response_only(bad_request());
     }
 
@@ -134,7 +137,10 @@ pub fn handle_send(
     storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
-    if validate_arg_count(args, 2, 2).is_err() || args[0].is_empty() {
+    if validate_arg_count(args, 2, 2).is_err()
+        || args[0].is_empty()
+        || !validate_max_len(&args[1], MAX_BODY_LENGTH)
+    {
         return CommandOutcome::response_only(bad_request());
     }
 

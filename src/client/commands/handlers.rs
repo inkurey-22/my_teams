@@ -11,6 +11,10 @@ use crate::commands::protocol::{
 };
 use crate::commands::{CommandMap, PendingRequest, SessionState};
 
+const MAX_NAME_LENGTH: usize = 32;
+const MAX_DESCRIPTION_LENGTH: usize = 255;
+const MAX_BODY_LENGTH: usize = 512;
+
 fn check_arg_count(command: &str, args: &[String], min: usize, max: usize) -> io::Result<()> {
     if args.len() < min || args.len() > max {
         return Err(io::Error::new(
@@ -18,6 +22,17 @@ fn check_arg_count(command: &str, args: &[String], min: usize, max: usize) -> io
             format!("invalid argument count for {}", command),
         ));
     }
+    Ok(())
+}
+
+fn check_max_len(field: &str, value: &str, max: usize) -> io::Result<()> {
+    if value.chars().count() > max {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{} exceeds maximum length {}", field, max),
+        ));
+    }
+
     Ok(())
 }
 
@@ -94,6 +109,7 @@ pub fn handle_login(
     check_arg_count("/login", args, 1, 1)?;
 
     let user_name = &args[0];
+    check_max_len("user_name", user_name, MAX_NAME_LENGTH)?;
     let request = build_login_request(user_name);
     stream.write_all(request.as_bytes())?;
 
@@ -163,6 +179,7 @@ pub fn handle_send(
 
     let user_uuid = &args[0];
     let message_body = &args[1];
+    check_max_len("message_body", message_body, MAX_BODY_LENGTH)?;
     let request = build_send_request(user_uuid, message_body);
     stream.write_all(request.as_bytes())?;
 
@@ -255,11 +272,15 @@ pub fn handle_create(
     match current_context(state)? {
         ContextLevel::Root => {
             check_arg_count("/create", args, 2, 2)?;
+            check_max_len("team_name", &args[0], MAX_NAME_LENGTH)?;
+            check_max_len("team_description", &args[1], MAX_DESCRIPTION_LENGTH)?;
             send_request(stream, build_create_team_request(&args[0], &args[1]))?;
             state.pending_request = Some(PendingRequest::CreateTeam);
         }
         ContextLevel::Team { team_uuid } => {
             check_arg_count("/create", args, 2, 2)?;
+            check_max_len("channel_name", &args[0], MAX_NAME_LENGTH)?;
+            check_max_len("channel_description", &args[1], MAX_DESCRIPTION_LENGTH)?;
             send_request(stream, build_create_channel_request(&args[0], &args[1]))?;
             state.pending_request = Some(PendingRequest::CreateChannel { team_uuid });
         }
@@ -268,6 +289,8 @@ pub fn handle_create(
             channel_uuid,
         } => {
             check_arg_count("/create", args, 2, 2)?;
+            check_max_len("thread_title", &args[0], MAX_NAME_LENGTH)?;
+            check_max_len("thread_message", &args[1], MAX_BODY_LENGTH)?;
             send_request(stream, build_create_thread_request(&args[0], &args[1]))?;
             state.pending_request = Some(PendingRequest::CreateThread {
                 team_uuid,
@@ -280,6 +303,7 @@ pub fn handle_create(
             thread_uuid,
         } => {
             check_arg_count("/create", args, 1, 1)?;
+            check_max_len("comment_body", &args[0], MAX_BODY_LENGTH)?;
             send_request(stream, build_create_reply_request(&args[0]))?;
             state.pending_request = Some(PendingRequest::CreateReply {
                 team_uuid,
