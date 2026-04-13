@@ -531,5 +531,6 @@ mod tests {
         assert_eq!(obj["field number"], JsonValue::Number(-9876543210.0123));
         assert_eq!(obj["field boolean"], JsonValue::Bool(false));
         assert_eq!(obj.get("nonexistent"), None);
+        std::fs::remove_file("tests/test.json").unwrap();
     }
 }
