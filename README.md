@@ -37,7 +37,7 @@ The implementation follows strict project rules:
 - `src/server/`: server runtime, command handling, protocol, persistence
 - `src/client/`: interactive CLI shell, command dispatch, network I/O
 - `src/json/`: in-house JSON read/write module used by the server
-- `data/`: runtime JSON storage files (`users.json`, `teams.json`, `messages.json`)
+- `data/`: runtime JSON storage files (`users.json`, `teams.json`, `messages.json`) (reworked with actual DB once project is finished)
 - `libs/myteams/`: provided shared library (`libmyteams.so`) and C headers
 - `STANDARDS.md`: protocol and command specification document
 
@@ -151,6 +151,8 @@ Server state is persisted in:
 - `data/messages.json`
 
 Files are created automatically on first run if missing.
+
+(will use an actual DB once school project is finished)
 
 ## Protocol reference
 
