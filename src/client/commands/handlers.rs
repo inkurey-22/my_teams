@@ -2,8 +2,12 @@ use std::io::{self, Write};
 use std::net::TcpStream;
 
 use crate::commands::protocol::{
+    build_create_channel_request, build_create_reply_request, build_create_team_request,
+    build_create_thread_request, build_info_channel_request, build_info_team_request,
+    build_info_thread_request, build_info_user_request, build_list_channels_request,
+    build_list_replies_request, build_list_teams_request, build_list_threads_request,
     build_login_request, build_logout_request, build_messages_request, build_send_request,
-    build_user_request, build_users_request,
+    build_use_request, build_user_request, build_users_request,
 };
 use crate::commands::{CommandMap, PendingRequest, SessionState};
 
@@ -15,6 +19,52 @@ fn check_arg_count(command: &str, args: &[String], min: usize, max: usize) -> io
         ));
     }
     Ok(())
+}
+
+enum ContextLevel {
+    Root,
+    Team {
+        team_uuid: String,
+    },
+    Channel {
+        team_uuid: String,
+        channel_uuid: String,
+    },
+    Thread {
+        team_uuid: String,
+        channel_uuid: String,
+        thread_uuid: String,
+    },
+}
+
+fn current_context(state: &SessionState) -> io::Result<ContextLevel> {
+    match (
+        state.context.team_uuid.as_ref(),
+        state.context.channel_uuid.as_ref(),
+        state.context.thread_uuid.as_ref(),
+    ) {
+        (None, None, None) => Ok(ContextLevel::Root),
+        (Some(team_uuid), None, None) => Ok(ContextLevel::Team {
+            team_uuid: team_uuid.clone(),
+        }),
+        (Some(team_uuid), Some(channel_uuid), None) => Ok(ContextLevel::Channel {
+            team_uuid: team_uuid.clone(),
+            channel_uuid: channel_uuid.clone(),
+        }),
+        (Some(team_uuid), Some(channel_uuid), Some(thread_uuid)) => Ok(ContextLevel::Thread {
+            team_uuid: team_uuid.clone(),
+            channel_uuid: channel_uuid.clone(),
+            thread_uuid: thread_uuid.clone(),
+        }),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid command context",
+        )),
+    }
+}
+
+fn send_request(stream: &mut TcpStream, request: String) -> io::Result<()> {
+    stream.write_all(request.as_bytes())
 }
 
 pub fn handle_help(
@@ -182,48 +232,145 @@ pub fn handle_unsubscribe(
 pub fn handle_use(
     state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/use", args, 0, 3)?;
 
-    state.context.team_uuid = args.first().cloned();
-    state.context.channel_uuid = args.get(1).cloned();
-    state.context.thread_uuid = args.get(2).cloned();
-
-    // TODO: propagate selected context to server-side command execution.
+    send_request(stream, build_use_request(args))?;
+    state.pending_request = Some(PendingRequest::Use {
+        team_uuid: args.first().cloned(),
+        channel_uuid: args.get(1).cloned(),
+        thread_uuid: args.get(2).cloned(),
+    });
     Ok(())
 }
 
 pub fn handle_create(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
-    check_arg_count("/create", args, 0, 0)?;
-    // TODO: create resource based on current context.
+    match current_context(state)? {
+        ContextLevel::Root => {
+            check_arg_count("/create", args, 2, 2)?;
+            send_request(stream, build_create_team_request(&args[0], &args[1]))?;
+            state.pending_request = Some(PendingRequest::CreateTeam);
+        }
+        ContextLevel::Team { team_uuid } => {
+            check_arg_count("/create", args, 2, 2)?;
+            send_request(stream, build_create_channel_request(&args[0], &args[1]))?;
+            state.pending_request = Some(PendingRequest::CreateChannel { team_uuid });
+        }
+        ContextLevel::Channel {
+            team_uuid,
+            channel_uuid,
+        } => {
+            check_arg_count("/create", args, 2, 2)?;
+            send_request(stream, build_create_thread_request(&args[0], &args[1]))?;
+            state.pending_request = Some(PendingRequest::CreateThread {
+                team_uuid,
+                channel_uuid,
+            });
+        }
+        ContextLevel::Thread {
+            team_uuid,
+            channel_uuid,
+            thread_uuid,
+        } => {
+            check_arg_count("/create", args, 1, 1)?;
+            send_request(stream, build_create_reply_request(&args[0]))?;
+            state.pending_request = Some(PendingRequest::CreateReply {
+                team_uuid,
+                channel_uuid,
+                thread_uuid,
+            });
+        }
+    }
     Ok(())
 }
 
 pub fn handle_list(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/list", args, 0, 0)?;
-    // TODO: list resources based on current context.
+    match current_context(state)? {
+        ContextLevel::Root => {
+            send_request(stream, build_list_teams_request())?;
+            state.pending_request = Some(PendingRequest::ListTeams);
+        }
+        ContextLevel::Team { team_uuid } => {
+            send_request(stream, build_list_channels_request())?;
+            state.pending_request = Some(PendingRequest::ListChannels { team_uuid });
+        }
+        ContextLevel::Channel {
+            team_uuid,
+            channel_uuid,
+        } => {
+            send_request(stream, build_list_threads_request())?;
+            state.pending_request = Some(PendingRequest::ListThreads {
+                team_uuid,
+                channel_uuid,
+            });
+        }
+        ContextLevel::Thread {
+            team_uuid,
+            channel_uuid,
+            thread_uuid,
+        } => {
+            send_request(stream, build_list_replies_request())?;
+            state.pending_request = Some(PendingRequest::ListReplies {
+                team_uuid,
+                channel_uuid,
+                thread_uuid,
+            });
+        }
+    }
     Ok(())
 }
 
 pub fn handle_info(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/info", args, 0, 0)?;
-    // TODO: show current resource info from context.
+    match current_context(state)? {
+        ContextLevel::Root => {
+            send_request(stream, build_info_user_request())?;
+            state.pending_request = Some(PendingRequest::InfoUser);
+        }
+        ContextLevel::Team { team_uuid } => {
+            send_request(stream, build_info_team_request())?;
+            state.pending_request = Some(PendingRequest::InfoTeam { team_uuid });
+        }
+        ContextLevel::Channel {
+            team_uuid,
+            channel_uuid,
+        } => {
+            send_request(stream, build_info_channel_request())?;
+            state.pending_request = Some(PendingRequest::InfoChannel {
+                team_uuid,
+                channel_uuid,
+            });
+        }
+        ContextLevel::Thread {
+            team_uuid,
+            channel_uuid,
+            thread_uuid,
+        } => {
+            send_request(stream, build_info_thread_request())?;
+            state.pending_request = Some(PendingRequest::InfoThread {
+                team_uuid,
+                channel_uuid,
+                thread_uuid,
+            });
+        }
+    }
     Ok(())
 }

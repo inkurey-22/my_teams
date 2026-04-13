@@ -24,16 +24,27 @@ pub struct MessageEntry {
 }
 
 #[derive(Debug, Clone)]
+pub struct ReplyEntry {
+    pub user_uuid: String,
+    pub timestamp: i64,
+    pub body: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct ThreadEntry {
     pub uuid: String,
+    pub user_uuid: String,
+    pub timestamp: i64,
     pub title: String,
     pub body: String,
+    pub replies: Vec<ReplyEntry>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChannelEntry {
     pub uuid: String,
     pub name: String,
+    pub description: String,
     pub threads: Vec<ThreadEntry>,
 }
 
@@ -41,6 +52,7 @@ pub struct ChannelEntry {
 pub struct TeamEntry {
     pub uuid: String,
     pub name: String,
+    pub description: String,
     pub channels: Vec<ChannelEntry>,
 }
 
@@ -163,6 +175,25 @@ impl ServerStorage {
 
     pub fn team_tree(&self) -> &TeamTree {
         &self.team_tree
+    }
+
+    pub fn team(&self, team_uuid: &str) -> Option<&TeamEntry> {
+        self.team_tree.teams.iter().find(|team| team.uuid == team_uuid)
+    }
+
+    pub fn channel(&self, team_uuid: &str, channel_uuid: &str) -> Option<&ChannelEntry> {
+        self.team(team_uuid)
+            .and_then(|team| team.channels.iter().find(|channel| channel.uuid == channel_uuid))
+    }
+
+    pub fn thread(
+        &self,
+        team_uuid: &str,
+        channel_uuid: &str,
+        thread_uuid: &str,
+    ) -> Option<&ThreadEntry> {
+        self.channel(team_uuid, channel_uuid)
+            .and_then(|channel| channel.threads.iter().find(|thread| thread.uuid == thread_uuid))
     }
 
     pub fn replace_team_tree(&mut self, team_tree: TeamTree) -> Result<(), StorageError> {
@@ -289,6 +320,10 @@ fn teams_to_json_value(tree: &TeamTree) -> JsonValue {
             let mut team_obj = JsonObject::new();
             team_obj.insert("uuid".to_string(), JsonValue::String(team.uuid.clone()));
             team_obj.insert("name".to_string(), JsonValue::String(team.name.clone()));
+            team_obj.insert(
+                "description".to_string(),
+                JsonValue::String(team.description.clone()),
+            );
 
             let channels = team
                 .channels
@@ -297,6 +332,10 @@ fn teams_to_json_value(tree: &TeamTree) -> JsonValue {
                     let mut channel_obj = JsonObject::new();
                     channel_obj.insert("uuid".to_string(), JsonValue::String(channel.uuid.clone()));
                     channel_obj.insert("name".to_string(), JsonValue::String(channel.name.clone()));
+                    channel_obj.insert(
+                        "description".to_string(),
+                        JsonValue::String(channel.description.clone()),
+                    );
 
                     let threads = channel
                         .threads
@@ -306,11 +345,42 @@ fn teams_to_json_value(tree: &TeamTree) -> JsonValue {
                             thread_obj
                                 .insert("uuid".to_string(), JsonValue::String(thread.uuid.clone()));
                             thread_obj.insert(
+                                "user_uuid".to_string(),
+                                JsonValue::String(thread.user_uuid.clone()),
+                            );
+                            thread_obj.insert(
+                                "timestamp".to_string(),
+                                JsonValue::Number(thread.timestamp as f64),
+                            );
+                            thread_obj.insert(
                                 "title".to_string(),
                                 JsonValue::String(thread.title.clone()),
                             );
                             thread_obj
                                 .insert("body".to_string(), JsonValue::String(thread.body.clone()));
+
+                            let replies = thread
+                                .replies
+                                .iter()
+                                .map(|reply| {
+                                    let mut reply_obj = JsonObject::new();
+                                    reply_obj.insert(
+                                        "user_uuid".to_string(),
+                                        JsonValue::String(reply.user_uuid.clone()),
+                                    );
+                                    reply_obj.insert(
+                                        "timestamp".to_string(),
+                                        JsonValue::Number(reply.timestamp as f64),
+                                    );
+                                    reply_obj.insert(
+                                        "body".to_string(),
+                                        JsonValue::String(reply.body.clone()),
+                                    );
+                                    JsonValue::Object(reply_obj)
+                                })
+                                .collect();
+
+                            thread_obj.insert("replies".to_string(), JsonValue::Array(replies));
                             JsonValue::Object(thread_obj)
                         })
                         .collect();
@@ -341,6 +411,7 @@ fn teams_from_json_value(value: &JsonValue) -> Result<TeamTree, StorageError> {
         let team_obj = expect_object(team_value, "teams[] item")?;
         let team_uuid = expect_string_field(team_obj, "uuid")?.to_string();
         let team_name = expect_string_field(team_obj, "name")?.to_string();
+        let team_description = expect_string_field_or_default(team_obj, "description")?.to_string();
 
         let channels_value = team_obj
             .get("channels")
@@ -352,6 +423,8 @@ fn teams_from_json_value(value: &JsonValue) -> Result<TeamTree, StorageError> {
             let channel_obj = expect_object(channel_value, "channels[] item")?;
             let channel_uuid = expect_string_field(channel_obj, "uuid")?.to_string();
             let channel_name = expect_string_field(channel_obj, "name")?.to_string();
+            let channel_description =
+                expect_string_field_or_default(channel_obj, "description")?.to_string();
 
             let threads_value = channel_obj
                 .get("threads")
@@ -362,14 +435,48 @@ fn teams_from_json_value(value: &JsonValue) -> Result<TeamTree, StorageError> {
             for thread_value in threads_arr {
                 let thread_obj = expect_object(thread_value, "threads[] item")?;
                 let uuid = expect_string_field(thread_obj, "uuid")?.to_string();
+                let user_uuid = expect_string_field_or_default(thread_obj, "user_uuid")?.to_string();
+                let timestamp = expect_i64_field_or_default(thread_obj, "timestamp")?;
                 let title = expect_string_field(thread_obj, "title")?.to_string();
                 let body = expect_string_field(thread_obj, "body")?.to_string();
-                threads.push(ThreadEntry { uuid, title, body });
+
+                let replies = match thread_obj.get("replies") {
+                    Some(value) => {
+                        let replies_arr = expect_array(value, "replies")?;
+                        let mut replies = Vec::with_capacity(replies_arr.len());
+
+                        for reply_value in replies_arr {
+                            let reply_obj = expect_object(reply_value, "replies[] item")?;
+                            let user_uuid =
+                                expect_string_field(reply_obj, "user_uuid")?.to_string();
+                            let timestamp = expect_i64_field_or_default(reply_obj, "timestamp")?;
+                            let body = expect_string_field(reply_obj, "body")?.to_string();
+                            replies.push(ReplyEntry {
+                                user_uuid,
+                                timestamp,
+                                body,
+                            });
+                        }
+
+                        replies
+                    }
+                    None => Vec::new(),
+                };
+
+                threads.push(ThreadEntry {
+                    uuid,
+                    user_uuid,
+                    timestamp,
+                    title,
+                    body,
+                    replies,
+                });
             }
 
             channels.push(ChannelEntry {
                 uuid: channel_uuid,
                 name: channel_name,
+                description: channel_description,
                 threads,
             });
         }
@@ -377,6 +484,7 @@ fn teams_from_json_value(value: &JsonValue) -> Result<TeamTree, StorageError> {
         teams.push(TeamEntry {
             uuid: team_uuid,
             name: team_name,
+            description: team_description,
             channels,
         });
     }
@@ -463,6 +571,19 @@ fn expect_string_field<'a>(obj: &'a JsonObject, field: &str) -> Result<&'a str, 
     }
 }
 
+fn expect_string_field_or_default<'a>(
+    obj: &'a JsonObject,
+    field: &str,
+) -> Result<&'a str, StorageError> {
+    match obj.get(field) {
+        Some(JsonValue::String(value)) => Ok(value),
+        Some(_) => Err(StorageError::Schema(format!(
+            "field '{field}' is not a string"
+        ))),
+        None => Ok(""),
+    }
+}
+
 fn expect_i64_field(obj: &JsonObject, field: &str) -> Result<i64, StorageError> {
     let value = obj
         .get(field)
@@ -480,6 +601,23 @@ fn expect_i64_field(obj: &JsonObject, field: &str) -> Result<i64, StorageError> 
         _ => Err(StorageError::Schema(format!(
             "field '{field}' is not an integer number"
         ))),
+    }
+}
+
+fn expect_i64_field_or_default(obj: &JsonObject, field: &str) -> Result<i64, StorageError> {
+    match obj.get(field) {
+        Some(JsonValue::Number(n)) if n.is_finite() && n.fract() == 0.0 => {
+            if *n < i64::MIN as f64 || *n > i64::MAX as f64 {
+                return Err(StorageError::Schema(format!(
+                    "field '{field}' is out of i64 range"
+                )));
+            }
+            Ok(*n as i64)
+        }
+        Some(_) => Err(StorageError::Schema(format!(
+            "field '{field}' is not an integer number"
+        ))),
+        None => Ok(0),
     }
 }
 

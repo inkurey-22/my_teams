@@ -4,8 +4,16 @@ use crate::storage::ServerStorage;
 use crate::users::UserStore;
 
 #[derive(Default)]
+pub struct CommandContext {
+    pub team_uuid: Option<String>,
+    pub channel_uuid: Option<String>,
+    pub thread_uuid: Option<String>,
+}
+
+#[derive(Default)]
 pub struct SessionState {
     pub user_uuid: Option<String>,
+    pub context: CommandContext,
 }
 
 pub struct InfoEvent {

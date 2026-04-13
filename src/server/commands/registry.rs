@@ -100,6 +100,38 @@ pub fn command_registry() -> CommandMap {
             },
         ),
         (
+            "CREATE_TEAM",
+            CommandDefinition {
+                usage: "CREATE_TEAM [\"team_name\"] [\"team_description\"]",
+                description: "create a team in root context",
+                handler: handlers::handle_create,
+            },
+        ),
+        (
+            "CREATE_CHAN",
+            CommandDefinition {
+                usage: "CREATE_CHAN [\"channel_name\"] [\"channel_description\"]",
+                description: "create a channel in team context",
+                handler: handlers::handle_create,
+            },
+        ),
+        (
+            "CREATE_THREAD",
+            CommandDefinition {
+                usage: "CREATE_THREAD [\"thread_title\"] [\"thread_body\"]",
+                description: "create a thread in channel context",
+                handler: handlers::handle_create,
+            },
+        ),
+        (
+            "CREATE_REP",
+            CommandDefinition {
+                usage: "CREATE_REP [\"reply_body\"]",
+                description: "create a reply in thread context",
+                handler: handlers::handle_create,
+            },
+        ),
+        (
             "LIST",
             CommandDefinition {
                 usage: "LIST",
@@ -108,10 +140,74 @@ pub fn command_registry() -> CommandMap {
             },
         ),
         (
+            "LIST_TEAMS",
+            CommandDefinition {
+                usage: "LIST_TEAMS",
+                description: "list teams from root context",
+                handler: handlers::handle_list,
+            },
+        ),
+        (
+            "LIST_CHANS",
+            CommandDefinition {
+                usage: "LIST_CHANS",
+                description: "list channels from team context",
+                handler: handlers::handle_list,
+            },
+        ),
+        (
+            "LIST_THREADS",
+            CommandDefinition {
+                usage: "LIST_THREADS",
+                description: "list threads from channel context",
+                handler: handlers::handle_list,
+            },
+        ),
+        (
+            "LIST_REPS",
+            CommandDefinition {
+                usage: "LIST_REPS",
+                description: "list replies from thread context",
+                handler: handlers::handle_list,
+            },
+        ),
+        (
             "INFO",
             CommandDefinition {
                 usage: "INFO",
                 description: "based on context, display resource details",
+                handler: handlers::handle_info,
+            },
+        ),
+        (
+            "INFO_USER",
+            CommandDefinition {
+                usage: "INFO_USER",
+                description: "show current user details",
+                handler: handlers::handle_info,
+            },
+        ),
+        (
+            "INFO_TEAM",
+            CommandDefinition {
+                usage: "INFO_TEAM",
+                description: "show selected team details",
+                handler: handlers::handle_info,
+            },
+        ),
+        (
+            "INFO_CHAN",
+            CommandDefinition {
+                usage: "INFO_CHAN",
+                description: "show selected channel details",
+                handler: handlers::handle_info,
+            },
+        ),
+        (
+            "INFO_THREAD",
+            CommandDefinition {
+                usage: "INFO_THREAD",
+                description: "show selected thread details",
                 handler: handlers::handle_info,
             },
         ),

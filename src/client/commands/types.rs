@@ -20,6 +20,50 @@ pub enum PendingRequest {
     Messages {
         user_uuid: String,
     },
+    Use {
+        team_uuid: Option<String>,
+        channel_uuid: Option<String>,
+        thread_uuid: Option<String>,
+    },
+    CreateTeam,
+    CreateChannel {
+        team_uuid: String,
+    },
+    CreateThread {
+        team_uuid: String,
+        channel_uuid: String,
+    },
+    CreateReply {
+        team_uuid: String,
+        channel_uuid: String,
+        thread_uuid: String,
+    },
+    ListTeams,
+    ListChannels {
+        team_uuid: String,
+    },
+    ListThreads {
+        team_uuid: String,
+        channel_uuid: String,
+    },
+    ListReplies {
+        team_uuid: String,
+        channel_uuid: String,
+        thread_uuid: String,
+    },
+    InfoUser,
+    InfoTeam {
+        team_uuid: String,
+    },
+    InfoChannel {
+        team_uuid: String,
+        channel_uuid: String,
+    },
+    InfoThread {
+        team_uuid: String,
+        channel_uuid: String,
+        thread_uuid: String,
+    },
 }
 
 #[derive(Default)]

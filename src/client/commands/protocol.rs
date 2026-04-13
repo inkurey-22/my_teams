@@ -32,6 +32,83 @@ pub fn build_messages_request(user_uuid: &str) -> String {
     format!("C100 MESSAGES \"{}\"\r\n", quote_net_argument(user_uuid))
 }
 
+pub fn build_use_request(args: &[String]) -> String {
+    if args.is_empty() {
+        return "C100 USE\r\n".to_string();
+    }
+
+    let quoted_args = args
+        .iter()
+        .map(|arg| format!("\"{}\"", quote_net_argument(arg)))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    format!("C100 USE {}\r\n", quoted_args)
+}
+
+pub fn build_create_team_request(team_name: &str, team_description: &str) -> String {
+    format!(
+        "C100 CREATE_TEAM \"{}\" \"{}\"\r\n",
+        quote_net_argument(team_name),
+        quote_net_argument(team_description)
+    )
+}
+
+pub fn build_create_channel_request(channel_name: &str, channel_description: &str) -> String {
+    format!(
+        "C100 CREATE_CHAN \"{}\" \"{}\"\r\n",
+        quote_net_argument(channel_name),
+        quote_net_argument(channel_description)
+    )
+}
+
+pub fn build_create_thread_request(thread_title: &str, thread_body: &str) -> String {
+    format!(
+        "C100 CREATE_THREAD \"{}\" \"{}\"\r\n",
+        quote_net_argument(thread_title),
+        quote_net_argument(thread_body)
+    )
+}
+
+pub fn build_create_reply_request(comment_body: &str) -> String {
+    format!(
+        "C100 CREATE_REP \"{}\"\r\n",
+        quote_net_argument(comment_body)
+    )
+}
+
+pub fn build_list_teams_request() -> String {
+    "C100 LIST_TEAMS\r\n".to_string()
+}
+
+pub fn build_list_channels_request() -> String {
+    "C100 LIST_CHANS\r\n".to_string()
+}
+
+pub fn build_list_threads_request() -> String {
+    "C100 LIST_THREADS\r\n".to_string()
+}
+
+pub fn build_list_replies_request() -> String {
+    "C100 LIST_REPS\r\n".to_string()
+}
+
+pub fn build_info_user_request() -> String {
+    "C100 INFO_USER\r\n".to_string()
+}
+
+pub fn build_info_team_request() -> String {
+    "C100 INFO_TEAM\r\n".to_string()
+}
+
+pub fn build_info_channel_request() -> String {
+    "C100 INFO_CHAN\r\n".to_string()
+}
+
+pub fn build_info_thread_request() -> String {
+    "C100 INFO_THREAD\r\n".to_string()
+}
+
 pub fn parse_response_code(response: &str) -> io::Result<u16> {
     let header = response
         .split_whitespace()
