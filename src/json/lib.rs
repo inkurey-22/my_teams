@@ -470,3 +470,66 @@ fn utf8_char_width(first: u8) -> usize {
         _ => 0,
     }
 }
+
+//tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_json() -> JsonObject {
+        JsonObject::from([
+            (
+                "field string".to_string(),
+                JsonValue::String("wawa".to_string()),
+            ),
+            (
+                "field number".to_string(),
+                JsonValue::Number(-9876543210.0123),
+            ),
+            ("field boolean".to_string(), JsonValue::Bool(false)),
+        ])
+    }
+
+    #[test]
+    fn basic_json_object_creation() {
+        let obj = create_test_json();
+        assert_eq!(obj["field string"], JsonValue::String("wawa".to_string()));
+        assert_eq!(obj["field number"], JsonValue::Number(-9876543210.0123));
+        assert_eq!(obj["field boolean"], JsonValue::Bool(false));
+        assert_eq!(obj.get("nonexistent"), None);
+    }
+
+    #[test]
+    fn json_object_stringification() {
+        let obj = create_test_json();
+        assert_eq!(stringify_json_value(&obj["field string"]), r#""wawa""#);
+        assert_eq!(
+            stringify_json_value(&obj["field number"]),
+            "-9876543210.0123"
+        );
+        assert_eq!(stringify_json_value(&obj["field boolean"]), "false");
+    }
+
+    #[test]
+    fn json_stringification() {
+        let obj = create_test_json();
+        let json = stringify_json_object(&obj).unwrap();
+        assert_eq!(
+            json,
+            r#"{"field boolean":false,"field number":-9876543210.0123,"field string":"wawa"}"#
+        );
+    }
+
+    #[test]
+    fn json_file_writing() {
+        let mut obj = create_test_json();
+        let mut json = stringify_json_object(&obj).unwrap();
+        write_json_text("tests/test.json", &json).unwrap();
+        json = read_json_text("tests/test.json").unwrap();
+        obj = parse_json_object(&json).unwrap();
+        assert_eq!(obj["field string"], JsonValue::String("wawa".to_string()));
+        assert_eq!(obj["field number"], JsonValue::Number(-9876543210.0123));
+        assert_eq!(obj["field boolean"], JsonValue::Bool(false));
+        assert_eq!(obj.get("nonexistent"), None);
+    }
+}

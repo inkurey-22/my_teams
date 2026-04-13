@@ -10,7 +10,7 @@ TARGETS = myteams_server myteams_cli
 RELEASE_DIR = $(TARGET_DIR)/release
 DEBUG_DIR = $(TARGET_DIR)/debug
 
-.PHONY: all clean fclean re debug
+.PHONY: all clean fclean re debug test tests_run
 
 all:
 	cargo build --release
@@ -29,3 +29,8 @@ debug:
 	cargo build
 	cp $(DEBUG_DIR)/myteams_server .
 	cp $(DEBUG_DIR)/myteams_cli .
+
+test: tests_run
+
+tests_run:
+	cargo test
