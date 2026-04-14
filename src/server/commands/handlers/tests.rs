@@ -1,6 +1,6 @@
 use super::*;
-use crate::commands::{CommandMap, SessionState};
 use crate::commands::types::CommandContext;
+use crate::commands::{CommandMap, SessionState};
 use crate::storage::ServerStorage;
 use crate::users::UserStore;
 
@@ -201,12 +201,10 @@ fn send_command_rejects_unauthorized_user() {
 
     assert_eq!(outcome.response, "R401 \"unauthorized\"\r\n");
     assert!(outcome.info_events.is_empty());
-    assert!(
-        test_storage
-            .storage
-            .conversation_messages("uuid-alice", "uuid-bob")
-            .is_empty()
-    );
+    assert!(test_storage
+        .storage
+        .conversation_messages("uuid-alice", "uuid-bob")
+        .is_empty());
 }
 
 #[test]
@@ -361,6 +359,136 @@ fn use_command_rejects_unknown_channel_without_mutating_context() {
 }
 
 #[test]
+fn subscribe_and_subscribed_commands_track_team_membership() {
+    let mut state = SessionState {
+        user_uuid: Some("uuid-alice".to_string()),
+        context: Default::default(),
+    };
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![("alice".to_string(), "uuid-alice".to_string())]);
+    let mut test_storage = TestStorage::new();
+    test_storage
+        .storage
+        .replace_team_tree(crate::storage::TeamTree {
+            teams: vec![crate::storage::TeamEntry {
+                uuid: "team-1".to_string(),
+                name: "Team 1".to_string(),
+                description: "Desc 1".to_string(),
+                channels: Vec::new(),
+            }],
+        })
+        .expect("seed tree should persist");
+
+    let subscribe_outcome = handle_subscribe(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["team-1".to_string()],
+    );
+    assert_eq!(
+        subscribe_outcome.response,
+        "R200 \"SUBSCRIBED\" \"uuid-alice\" \"team-1\"\r\n"
+    );
+
+    let subscribed_teams_outcome = handle_subscribed(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &[],
+    );
+    assert_eq!(
+        subscribed_teams_outcome.response,
+        "R200 \"TEAMS\" \"team-1\" \"Team 1\" \"Desc 1\"\r\n"
+    );
+
+    let subscribed_users_outcome = handle_subscribed(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["team-1".to_string()],
+    );
+    assert_eq!(
+        subscribed_users_outcome.response,
+        "R200 \"USERS\" \"uuid-alice\" \"alice\" \"0\"\r\n"
+    );
+}
+
+#[test]
+fn unsubscribe_removes_membership_from_listings() {
+    let mut state = SessionState {
+        user_uuid: Some("uuid-alice".to_string()),
+        context: Default::default(),
+    };
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![("alice".to_string(), "uuid-alice".to_string())]);
+    let mut test_storage = TestStorage::new();
+    test_storage
+        .storage
+        .replace_team_tree(crate::storage::TeamTree {
+            teams: vec![crate::storage::TeamEntry {
+                uuid: "team-1".to_string(),
+                name: "Team 1".to_string(),
+                description: "Desc 1".to_string(),
+                channels: Vec::new(),
+            }],
+        })
+        .expect("seed tree should persist");
+
+    let _ = handle_subscribe(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["team-1".to_string()],
+    );
+
+    let unsubscribe_outcome = handle_unsubscribe(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["team-1".to_string()],
+    );
+    assert_eq!(
+        unsubscribe_outcome.response,
+        "R200 \"UNSUBSCRIBED\" \"uuid-alice\" \"team-1\"\r\n"
+    );
+
+    let subscribed_teams_outcome = handle_subscribed(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &[],
+    );
+    assert_eq!(subscribed_teams_outcome.response, "R200 \"TEAMS\"\r\n");
+}
+
+#[test]
+fn subscribe_returns_not_found_for_unknown_team() {
+    let mut state = SessionState {
+        user_uuid: Some("uuid-alice".to_string()),
+        context: Default::default(),
+    };
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![("alice".to_string(), "uuid-alice".to_string())]);
+    let mut test_storage = TestStorage::new();
+
+    let outcome = handle_subscribe(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["unknown-team".to_string()],
+    );
+
+    assert_eq!(outcome.response, "R404 \"unknown-team\"\r\n");
+}
+
+#[test]
 fn create_team_in_root_context_persists_team() {
     let mut state = SessionState {
         user_uuid: Some("uuid-alice".to_string()),
@@ -433,6 +561,60 @@ fn create_channel_in_team_context_persists_channel() {
     assert_eq!(team.channels.len(), 1);
     assert_eq!(team.channels[0].name, "general");
     assert_eq!(team.channels[0].description, "General channel");
+
+    assert_eq!(outcome.info_events.len(), 0);
+}
+
+#[test]
+fn create_channel_notifies_all_team_subscribers() {
+    let mut state = SessionState {
+        user_uuid: Some("uuid-alice".to_string()),
+        context: Default::default(),
+    };
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![
+        ("alice".to_string(), "uuid-alice".to_string()),
+        ("bob".to_string(), "uuid-bob".to_string()),
+    ]);
+    let mut test_storage = TestStorage::new();
+
+    test_storage
+        .storage
+        .replace_team_tree(crate::storage::TeamTree {
+            teams: vec![crate::storage::TeamEntry {
+                uuid: "team-a".to_string(),
+                name: "Team A".to_string(),
+                description: "Desc A".to_string(),
+                channels: Vec::new(),
+            }],
+        })
+        .expect("seed tree should persist");
+
+    users.subscribe_to_team("uuid-alice", "team-a");
+    users.subscribe_to_team("uuid-bob", "team-a");
+
+    let use_outcome = handle_use(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["team-a".to_string()],
+    );
+    assert_eq!(use_outcome.response, "R200\r\n");
+
+    let outcome = handle_create(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["general".to_string(), "General channel".to_string()],
+    );
+
+    assert_eq!(outcome.info_events.len(), 2);
+    assert_eq!(outcome.info_events[0].recipient_user_uuid, "uuid-alice");
+    assert_eq!(outcome.info_events[1].recipient_user_uuid, "uuid-bob");
+    assert!(outcome.info_events[0].payload.starts_with("I100 NEW_CHANNEL \"team-a\" "));
+    assert_eq!(outcome.info_events[0].payload, outcome.info_events[1].payload);
 }
 
 #[test]
@@ -499,6 +681,98 @@ fn create_reply_in_thread_context_persists_reply() {
     assert_eq!(thread.replies.len(), 1);
     assert_eq!(thread.replies[0].user_uuid, "uuid-alice");
     assert_eq!(thread.replies[0].body, "reply body");
+
+    assert_eq!(outcome.info_events.len(), 0);
+}
+
+#[test]
+fn create_thread_and_reply_notify_all_team_subscribers() {
+    let mut state = SessionState {
+        user_uuid: Some("uuid-alice".to_string()),
+        context: Default::default(),
+    };
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![
+        ("alice".to_string(), "uuid-alice".to_string()),
+        ("bob".to_string(), "uuid-bob".to_string()),
+    ]);
+    let mut test_storage = TestStorage::new();
+
+    test_storage
+        .storage
+        .replace_team_tree(crate::storage::TeamTree {
+            teams: vec![crate::storage::TeamEntry {
+                uuid: "team-a".to_string(),
+                name: "Team A".to_string(),
+                description: "Desc A".to_string(),
+                channels: vec![crate::storage::ChannelEntry {
+                    uuid: "chan-a".to_string(),
+                    name: "general".to_string(),
+                    description: "General".to_string(),
+                    threads: Vec::new(),
+                }],
+            }],
+        })
+        .expect("seed tree should persist");
+
+    users.subscribe_to_team("uuid-alice", "team-a");
+    users.subscribe_to_team("uuid-bob", "team-a");
+
+    let use_channel_outcome = handle_use(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["team-a".to_string(), "chan-a".to_string()],
+    );
+    assert_eq!(use_channel_outcome.response, "R200\r\n");
+
+    let thread_outcome = handle_create(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["Topic".to_string(), "Body".to_string()],
+    );
+    assert_eq!(thread_outcome.info_events.len(), 2);
+    assert!(thread_outcome.info_events[0]
+        .payload
+        .starts_with("I100 NEW_THREAD \"team-a\" \"chan-a\" "));
+
+    let created_thread_uuid = test_storage
+        .storage
+        .channel("team-a", "chan-a")
+        .expect("channel should exist")
+        .threads
+        .first()
+        .expect("thread should have been created")
+        .uuid
+        .clone();
+
+    let use_thread_outcome = handle_use(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &[
+            "team-a".to_string(),
+            "chan-a".to_string(),
+            created_thread_uuid,
+        ],
+    );
+    assert_eq!(use_thread_outcome.response, "R200\r\n");
+
+    let reply_outcome = handle_create(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["reply body".to_string()],
+    );
+    assert_eq!(reply_outcome.info_events.len(), 2);
+    assert!(reply_outcome.info_events[0]
+        .payload
+        .starts_with("I100 NEW_REPLY \"team-a\" "));
 }
 
 #[test]

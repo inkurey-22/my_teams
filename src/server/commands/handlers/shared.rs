@@ -32,10 +32,6 @@ pub(crate) fn bad_request() -> String {
     response(501, Some("\"bad request\""))
 }
 
-pub(crate) fn not_found() -> String {
-    response(404, Some("\"not found\""))
-}
-
 pub(crate) fn unknown_user(user_uuid: &str) -> String {
     response(404, Some(&quoted(user_uuid)))
 }
@@ -121,11 +117,9 @@ pub(crate) fn cstring(value: &str) -> Option<CString> {
 }
 
 pub(crate) fn call_event_team_created(team_uuid: &str, team_name: &str, user_uuid: &str) {
-    let (Some(team_uuid), Some(team_name), Some(user_uuid)) = (
-        cstring(team_uuid),
-        cstring(team_name),
-        cstring(user_uuid),
-    ) else {
+    let (Some(team_uuid), Some(team_name), Some(user_uuid)) =
+        (cstring(team_uuid), cstring(team_name), cstring(user_uuid))
+    else {
         return;
     };
 
@@ -163,13 +157,20 @@ pub(crate) fn call_event_thread_created(
     thread_title: &str,
     thread_body: &str,
 ) {
-    let (Some(channel_uuid), Some(thread_uuid), Some(user_uuid), Some(thread_title), Some(thread_body)) = (
+    let (
+        Some(channel_uuid),
+        Some(thread_uuid),
+        Some(user_uuid),
+        Some(thread_title),
+        Some(thread_body),
+    ) = (
         cstring(channel_uuid),
         cstring(thread_uuid),
         cstring(user_uuid),
         cstring(thread_title),
         cstring(thread_body),
-    ) else {
+    )
+    else {
         return;
     };
 
@@ -199,6 +200,26 @@ pub(crate) fn call_event_reply_created(thread_uuid: &str, user_uuid: &str, reply
             user_uuid.as_ptr(),
             reply_body.as_ptr(),
         );
+    }
+}
+
+pub(crate) fn call_event_user_subscribed(team_uuid: &str, user_uuid: &str) {
+    let (Some(team_uuid), Some(user_uuid)) = (cstring(team_uuid), cstring(user_uuid)) else {
+        return;
+    };
+
+    unsafe {
+        let _ = libsrv::server_event_user_subscribed(team_uuid.as_ptr(), user_uuid.as_ptr());
+    }
+}
+
+pub(crate) fn call_event_user_unsubscribed(team_uuid: &str, user_uuid: &str) {
+    let (Some(team_uuid), Some(user_uuid)) = (cstring(team_uuid), cstring(user_uuid)) else {
+        return;
+    };
+
+    unsafe {
+        let _ = libsrv::server_event_user_unsubscribed(team_uuid.as_ptr(), user_uuid.as_ptr());
     }
 }
 
@@ -268,7 +289,10 @@ pub(crate) fn validate_max_len(value: &str, max: usize) -> bool {
     value.chars().count() <= max
 }
 
-pub(crate) fn team_index_mut<'a>(tree: &'a mut TeamTree, team_uuid: &str) -> Option<&'a mut TeamEntry> {
+pub(crate) fn team_index_mut<'a>(
+    tree: &'a mut TeamTree,
+    team_uuid: &str,
+) -> Option<&'a mut TeamEntry> {
     tree.teams.iter_mut().find(|team| team.uuid == team_uuid)
 }
 
@@ -277,8 +301,11 @@ pub(crate) fn channel_index_mut<'a>(
     team_uuid: &str,
     channel_uuid: &str,
 ) -> Option<&'a mut ChannelEntry> {
-    team_index_mut(tree, team_uuid)
-        .and_then(|team| team.channels.iter_mut().find(|channel| channel.uuid == channel_uuid))
+    team_index_mut(tree, team_uuid).and_then(|team| {
+        team.channels
+            .iter_mut()
+            .find(|channel| channel.uuid == channel_uuid)
+    })
 }
 
 pub(crate) fn thread_index_mut<'a>(
@@ -287,8 +314,12 @@ pub(crate) fn thread_index_mut<'a>(
     channel_uuid: &str,
     thread_uuid: &str,
 ) -> Option<&'a mut ThreadEntry> {
-    channel_index_mut(tree, team_uuid, channel_uuid)
-        .and_then(|channel| channel.threads.iter_mut().find(|thread| thread.uuid == thread_uuid))
+    channel_index_mut(tree, team_uuid, channel_uuid).and_then(|channel| {
+        channel
+            .threads
+            .iter_mut()
+            .find(|thread| thread.uuid == thread_uuid)
+    })
 }
 
 pub(crate) fn team_response(team: &TeamEntry) -> String {
@@ -334,7 +365,10 @@ pub(crate) fn reply_response(thread_uuid: &str, reply: &ReplyEntry) -> String {
     .join(" ")
 }
 
-pub(crate) fn current_user_details(state: &SessionState, users: &UserStore) -> Option<(String, String, bool)> {
+pub(crate) fn current_user_details(
+    state: &SessionState,
+    users: &UserStore,
+) -> Option<(String, String, bool)> {
     let user_uuid = state.user_uuid.as_ref()?;
     let (user_name, is_online) = users.user_details(user_uuid)?;
     Some((user_uuid.clone(), user_name, is_online))
@@ -377,7 +411,10 @@ pub(crate) fn validate_use_context(storage: &ServerStorage, args: &[String]) -> 
                 return Err(quoted(channel_uuid));
             }
 
-            if storage.thread(team_uuid, channel_uuid, thread_uuid).is_none() {
+            if storage
+                .thread(team_uuid, channel_uuid, thread_uuid)
+                .is_none()
+            {
                 return Err(quoted(thread_uuid));
             }
 

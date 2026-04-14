@@ -1,5 +1,33 @@
 use std::io;
 
+pub enum InfoMessage {
+    NewMessage {
+        sender_uuid: String,
+        message_body: String,
+    },
+    NewChannel {
+        team_uuid: String,
+        channel_uuid: String,
+        channel_name: String,
+        channel_description: String,
+    },
+    NewThread {
+        team_uuid: String,
+        channel_uuid: String,
+        thread_uuid: String,
+        user_uuid: String,
+        thread_timestamp: i64,
+        thread_title: String,
+        thread_body: String,
+    },
+    NewReply {
+        team_uuid: String,
+        thread_uuid: String,
+        user_uuid: String,
+        reply_body: String,
+    },
+}
+
 fn quote_net_argument(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -30,6 +58,21 @@ pub fn build_send_request(user_uuid: &str, message_body: &str) -> String {
 
 pub fn build_messages_request(user_uuid: &str) -> String {
     format!("C100 MESSAGES \"{}\"\r\n", quote_net_argument(user_uuid))
+}
+
+pub fn build_subscribe_request(team_uuid: &str) -> String {
+    format!("C100 SUBSCRIBE \"{}\"\r\n", quote_net_argument(team_uuid))
+}
+
+pub fn build_subscribed_request(team_uuid: Option<&str>) -> String {
+    match team_uuid {
+        Some(team_uuid) => format!("C100 SUBSCRIBED \"{}\"\r\n", quote_net_argument(team_uuid)),
+        None => "C100 SUBSCRIBED\r\n".to_string(),
+    }
+}
+
+pub fn build_unsubscribe_request(team_uuid: &str) -> String {
+    format!("C100 UNSUBSCRIBE \"{}\"\r\n", quote_net_argument(team_uuid))
 }
 
 pub fn build_use_request(args: &[String]) -> String {
@@ -198,7 +241,7 @@ pub fn parse_response_tokens(response: &str) -> io::Result<Vec<String>> {
     tokenize_body(body)
 }
 
-pub fn parse_new_message_info(line: &str) -> io::Result<Option<(String, String)>> {
+pub fn parse_info_message(line: &str) -> io::Result<Option<InfoMessage>> {
     let mut parts = line.trim().splitn(2, char::is_whitespace);
     let header = parts.next().unwrap_or("");
     if header != "I100" {
@@ -207,20 +250,86 @@ pub fn parse_new_message_info(line: &str) -> io::Result<Option<(String, String)>
 
     let body = parts.next().unwrap_or("");
     let tokens = tokenize_body(body)?;
-    if tokens.first().map(|t| t.as_str()) != Some("NEW_MESSAGE") {
+    let Some(event_name) = tokens.first().map(|value| value.as_str()) else {
         return Ok(None);
-    }
+    };
 
-    if tokens.len() == 2 {
-        return Ok(Some((String::new(), tokens[1].clone())));
-    }
+    match event_name {
+        "NEW_MESSAGE" => {
+            if tokens.len() == 2 {
+                return Ok(Some(InfoMessage::NewMessage {
+                    sender_uuid: String::new(),
+                    message_body: tokens[1].clone(),
+                }));
+            }
 
-    if tokens.len() == 3 {
-        return Ok(Some((tokens[1].clone(), tokens[2].clone())));
-    }
+            if tokens.len() == 3 {
+                return Ok(Some(InfoMessage::NewMessage {
+                    sender_uuid: tokens[1].clone(),
+                    message_body: tokens[2].clone(),
+                }));
+            }
 
-    Err(io::Error::new(
-        io::ErrorKind::InvalidData,
-        "invalid NEW_MESSAGE payload",
-    ))
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid NEW_MESSAGE payload",
+            ))
+        }
+        "NEW_CHANNEL" => {
+            if tokens.len() != 5 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid NEW_CHANNEL payload",
+                ));
+            }
+
+            Ok(Some(InfoMessage::NewChannel {
+                team_uuid: tokens[1].clone(),
+                channel_uuid: tokens[2].clone(),
+                channel_name: tokens[3].clone(),
+                channel_description: tokens[4].clone(),
+            }))
+        }
+        "NEW_THREAD" => {
+            if tokens.len() != 8 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid NEW_THREAD payload",
+                ));
+            }
+
+            let thread_timestamp = tokens[5].parse::<i64>().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid NEW_THREAD timestamp payload",
+                )
+            })?;
+
+            Ok(Some(InfoMessage::NewThread {
+                team_uuid: tokens[1].clone(),
+                channel_uuid: tokens[2].clone(),
+                thread_uuid: tokens[3].clone(),
+                user_uuid: tokens[4].clone(),
+                thread_timestamp,
+                thread_title: tokens[6].clone(),
+                thread_body: tokens[7].clone(),
+            }))
+        }
+        "NEW_REPLY" => {
+            if tokens.len() != 5 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid NEW_REPLY payload",
+                ));
+            }
+
+            Ok(Some(InfoMessage::NewReply {
+                team_uuid: tokens[1].clone(),
+                thread_uuid: tokens[2].clone(),
+                user_uuid: tokens[3].clone(),
+                reply_body: tokens[4].clone(),
+            }))
+        }
+        _ => Ok(None),
+    }
 }

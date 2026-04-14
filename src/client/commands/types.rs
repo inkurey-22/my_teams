@@ -20,6 +20,15 @@ pub enum PendingRequest {
     Messages {
         user_uuid: String,
     },
+    Subscribe {
+        team_uuid: String,
+    },
+    Subscribed {
+        team_uuid: Option<String>,
+    },
+    Unsubscribe {
+        team_uuid: String,
+    },
     Use {
         team_uuid: Option<String>,
         channel_uuid: Option<String>,

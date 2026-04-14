@@ -178,12 +178,18 @@ impl ServerStorage {
     }
 
     pub fn team(&self, team_uuid: &str) -> Option<&TeamEntry> {
-        self.team_tree.teams.iter().find(|team| team.uuid == team_uuid)
+        self.team_tree
+            .teams
+            .iter()
+            .find(|team| team.uuid == team_uuid)
     }
 
     pub fn channel(&self, team_uuid: &str, channel_uuid: &str) -> Option<&ChannelEntry> {
-        self.team(team_uuid)
-            .and_then(|team| team.channels.iter().find(|channel| channel.uuid == channel_uuid))
+        self.team(team_uuid).and_then(|team| {
+            team.channels
+                .iter()
+                .find(|channel| channel.uuid == channel_uuid)
+        })
     }
 
     pub fn thread(
@@ -192,8 +198,12 @@ impl ServerStorage {
         channel_uuid: &str,
         thread_uuid: &str,
     ) -> Option<&ThreadEntry> {
-        self.channel(team_uuid, channel_uuid)
-            .and_then(|channel| channel.threads.iter().find(|thread| thread.uuid == thread_uuid))
+        self.channel(team_uuid, channel_uuid).and_then(|channel| {
+            channel
+                .threads
+                .iter()
+                .find(|thread| thread.uuid == thread_uuid)
+        })
     }
 
     pub fn replace_team_tree(&mut self, team_tree: TeamTree) -> Result<(), StorageError> {
@@ -435,7 +445,8 @@ fn teams_from_json_value(value: &JsonValue) -> Result<TeamTree, StorageError> {
             for thread_value in threads_arr {
                 let thread_obj = expect_object(thread_value, "threads[] item")?;
                 let uuid = expect_string_field(thread_obj, "uuid")?.to_string();
-                let user_uuid = expect_string_field_or_default(thread_obj, "user_uuid")?.to_string();
+                let user_uuid =
+                    expect_string_field_or_default(thread_obj, "user_uuid")?.to_string();
                 let timestamp = expect_i64_field_or_default(thread_obj, "timestamp")?;
                 let title = expect_string_field(thread_obj, "title")?.to_string();
                 let body = expect_string_field(thread_obj, "body")?.to_string();
@@ -680,8 +691,9 @@ mod tests {
     #[test]
     fn append_private_message_is_persisted_on_disk() {
         let paths = TestPaths::new();
-        let mut storage = ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
-            .expect("storage should initialize");
+        let mut storage =
+            ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
+                .expect("storage should initialize");
 
         storage
             .append_private_message("uuid-alice", "uuid-bob", 1234, "hello")
@@ -701,8 +713,9 @@ mod tests {
     #[test]
     fn conversation_messages_only_returns_matching_pair() {
         let paths = TestPaths::new();
-        let mut storage = ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
-            .expect("storage should initialize");
+        let mut storage =
+            ServerStorage::load_or_default(&paths.users, &paths.teams, &paths.messages)
+                .expect("storage should initialize");
 
         storage
             .append_private_message("uuid-a", "uuid-b", 1, "a->b")

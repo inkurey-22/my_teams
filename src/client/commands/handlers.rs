@@ -7,6 +7,7 @@ use crate::commands::protocol::{
     build_info_thread_request, build_info_user_request, build_list_channels_request,
     build_list_replies_request, build_list_teams_request, build_list_threads_request,
     build_login_request, build_logout_request, build_messages_request, build_send_request,
+    build_subscribe_request, build_subscribed_request, build_unsubscribe_request,
     build_use_request, build_user_request, build_users_request,
 };
 use crate::commands::{CommandMap, PendingRequest, SessionState};
@@ -211,38 +212,51 @@ pub fn handle_messages(
 }
 
 pub fn handle_subscribe(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/subscribe", args, 1, 1)?;
-    let _team_uuid = &args[0];
-    // TODO: subscribe to a team.
+
+    let team_uuid = &args[0];
+    send_request(stream, build_subscribe_request(team_uuid))?;
+    state.pending_request = Some(PendingRequest::Subscribe {
+        team_uuid: team_uuid.clone(),
+    });
+
     Ok(())
 }
 
 pub fn handle_subscribed(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/subscribed", args, 0, 1)?;
-    let _team_uuid = args.first();
-    // TODO: list subscriptions or subscribers for a team.
+
+    let team_uuid = args.first().cloned();
+    send_request(stream, build_subscribed_request(team_uuid.as_deref()))?;
+    state.pending_request = Some(PendingRequest::Subscribed { team_uuid });
+
     Ok(())
 }
 
 pub fn handle_unsubscribe(
-    _state: &mut SessionState,
+    state: &mut SessionState,
     _registry: &CommandMap,
-    _stream: &mut TcpStream,
+    stream: &mut TcpStream,
     args: &[String],
 ) -> io::Result<()> {
     check_arg_count("/unsubscribe", args, 1, 1)?;
-    let _team_uuid = &args[0];
-    // TODO: unsubscribe from a team.
+
+    let team_uuid = &args[0];
+    send_request(stream, build_unsubscribe_request(team_uuid))?;
+    state.pending_request = Some(PendingRequest::Unsubscribe {
+        team_uuid: team_uuid.clone(),
+    });
+
     Ok(())
 }
 
