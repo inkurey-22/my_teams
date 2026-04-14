@@ -10,7 +10,7 @@ TARGETS = myteams_server myteams_cli
 RELEASE_DIR = $(TARGET_DIR)/release
 DEBUG_DIR = $(TARGET_DIR)/debug
 
-.PHONY: all clean fclean re debug test tests_run
+.PHONY: all clean fclean re debug test tests_run e2e
 
 all:
 	cargo build --release
@@ -29,6 +29,9 @@ debug:
 	cargo build
 	cp $(DEBUG_DIR)/myteams_server .
 	cp $(DEBUG_DIR)/myteams_cli .
+
+e2e: all
+	./scripts/e2e_test.sh
 
 test: tests_run
 
