@@ -524,13 +524,14 @@ mod tests {
     fn json_file_writing() {
         let mut obj = create_test_json();
         let mut json = stringify_json_object(&obj).unwrap();
-        write_json_text("tests/test.json", &json).unwrap();
-        json = read_json_text("tests/test.json").unwrap();
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("test.json");
+        write_json_text(test_file.to_str().unwrap(), &json).unwrap();
+        json = read_json_text(test_file.to_str().unwrap()).unwrap();
         obj = parse_json_object(&json).unwrap();
         assert_eq!(obj["field string"], JsonValue::String("wawa".to_string()));
         assert_eq!(obj["field number"], JsonValue::Number(-9876543210.0123));
         assert_eq!(obj["field boolean"], JsonValue::Bool(false));
         assert_eq!(obj.get("nonexistent"), None);
-        std::fs::remove_file("tests/test.json").unwrap();
     }
 }
