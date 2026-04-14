@@ -1,5 +1,5 @@
 use crate::commands::{
-    command_registry, dispatch_line, handle_response_line, parse_new_message_info,
+    command_registry, dispatch_line, handle_response_line, parse_info_message, InfoMessage,
     write_request_line, SessionState,
 };
 use crate::libcli;
@@ -16,20 +16,116 @@ fn print_prompt() -> io::Result<()> {
 }
 
 fn handle_info_message(line: &str) {
-    if let Ok(Some((sender_uuid, message_body))) = parse_new_message_info(line) {
-        let Ok(sender_cstr) = CString::new(sender_uuid) else {
-            return;
-        };
-        let Ok(message_cstr) = CString::new(message_body) else {
-            return;
-        };
+    let Ok(parsed) = parse_info_message(line) else {
+        return;
+    };
 
-        unsafe {
-            let _ = libcli::client_event_private_message_received(
-                sender_cstr.as_ptr(),
-                message_cstr.as_ptr(),
-            );
+    match parsed {
+        Some(InfoMessage::NewMessage {
+            sender_uuid,
+            message_body,
+        }) => {
+            let Ok(sender_cstr) = CString::new(sender_uuid) else {
+                return;
+            };
+            let Ok(message_cstr) = CString::new(message_body) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_private_message_received(
+                    sender_cstr.as_ptr(),
+                    message_cstr.as_ptr(),
+                );
+            }
         }
+        Some(InfoMessage::NewChannel {
+            team_uuid,
+            channel_uuid,
+            channel_name,
+            channel_description,
+        }) => {
+            let _ = team_uuid;
+            let Ok(channel_uuid_cstr) = CString::new(channel_uuid) else {
+                return;
+            };
+            let Ok(channel_name_cstr) = CString::new(channel_name) else {
+                return;
+            };
+            let Ok(channel_description_cstr) = CString::new(channel_description) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_channel_created(
+                    channel_uuid_cstr.as_ptr(),
+                    channel_name_cstr.as_ptr(),
+                    channel_description_cstr.as_ptr(),
+                );
+            }
+        }
+        Some(InfoMessage::NewThread {
+            team_uuid,
+            channel_uuid,
+            thread_uuid,
+            user_uuid,
+            thread_timestamp,
+            thread_title,
+            thread_body,
+        }) => {
+            let _ = (team_uuid, channel_uuid);
+            let Ok(thread_uuid_cstr) = CString::new(thread_uuid) else {
+                return;
+            };
+            let Ok(user_uuid_cstr) = CString::new(user_uuid) else {
+                return;
+            };
+            let Ok(thread_title_cstr) = CString::new(thread_title) else {
+                return;
+            };
+            let Ok(thread_body_cstr) = CString::new(thread_body) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_thread_created(
+                    thread_uuid_cstr.as_ptr(),
+                    user_uuid_cstr.as_ptr(),
+                    thread_timestamp as libcli::TimeT,
+                    thread_title_cstr.as_ptr(),
+                    thread_body_cstr.as_ptr(),
+                );
+            }
+        }
+        Some(InfoMessage::NewReply {
+            team_uuid,
+            thread_uuid,
+            user_uuid,
+            reply_body,
+        }) => {
+            let Ok(team_uuid_cstr) = CString::new(team_uuid) else {
+                return;
+            };
+            let Ok(thread_uuid_cstr) = CString::new(thread_uuid) else {
+                return;
+            };
+            let Ok(user_uuid_cstr) = CString::new(user_uuid) else {
+                return;
+            };
+            let Ok(reply_body_cstr) = CString::new(reply_body) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_thread_reply_received(
+                    team_uuid_cstr.as_ptr(),
+                    thread_uuid_cstr.as_ptr(),
+                    user_uuid_cstr.as_ptr(),
+                    reply_body_cstr.as_ptr(),
+                );
+            }
+        }
+        None => {}
     }
 }
 
@@ -70,7 +166,6 @@ fn process_socket_message(state: &mut SessionState, message: &str) {
     if message.starts_with('I') {
         println!("{}", message);
         handle_info_message(message);
-        return;
     }
 
     if message.starts_with('R') {
@@ -78,7 +173,6 @@ fn process_socket_message(state: &mut SessionState, message: &str) {
         if let Err(err) = handle_response_line(state, message) {
             eprintln!("failed to handle server response: {}", err);
         }
-        return;
     }
 }
 
@@ -108,9 +202,7 @@ fn process_pending_input(
                 }
             }
             Ok(false) => {
-                if let Err(err) = write_request_line(stream, &command) {
-                    return Err(err);
-                }
+                write_request_line(stream, &command)?;
 
                 if state.pending_request.is_none() {
                     break;

@@ -1,4 +1,4 @@
-use crate::commands::{CommandMap, CommandOutcome, SessionState};
+use crate::commands::{CommandMap, CommandOutcome, InfoEvent, SessionState};
 use crate::protocol::{quoted, response};
 use crate::storage::{ChannelEntry, ReplyEntry, ServerStorage, TeamEntry};
 use crate::users::UserStore;
@@ -11,10 +11,21 @@ use super::shared::{
     ResourceContext, MAX_BODY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH,
 };
 
+fn team_subscriber_info_events(users: &UserStore, team_uuid: &str, payload: String) -> Vec<InfoEvent> {
+    users
+        .subscribed_user_ids(team_uuid)
+        .into_iter()
+        .map(|recipient_user_uuid| InfoEvent {
+            recipient_user_uuid,
+            payload: payload.clone(),
+        })
+        .collect()
+}
+
 pub fn handle_create(
     state: &mut SessionState,
     _registry: &CommandMap,
-    _users: &mut UserStore,
+    users: &mut UserStore,
     storage: &mut ServerStorage,
     args: &[String],
 ) -> CommandOutcome {
@@ -44,7 +55,10 @@ pub fn handle_create(
             tree.teams.push(team.clone());
             if let Err(err) = storage.replace_team_tree(tree) {
                 eprintln!("Failed to persist team tree: {}", err);
-                return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+                return CommandOutcome::response_only(response(
+                    500,
+                    Some("\"internal server error\""),
+                ));
             }
 
             call_event_team_created(&team.uuid, &team.name, user_uuid);
@@ -78,11 +92,25 @@ pub fn handle_create(
             team.channels.push(channel.clone());
             if let Err(err) = storage.replace_team_tree(tree) {
                 eprintln!("Failed to persist team tree: {}", err);
-                return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+                return CommandOutcome::response_only(response(
+                    500,
+                    Some("\"internal server error\""),
+                ));
             }
 
             call_event_channel_created(&team_uuid, &channel.uuid, &channel.name);
-            CommandOutcome::response_only(response(200, Some(&channel_response(&channel))))
+            let info_payload = format!(
+                "I100 NEW_CHANNEL {} {} {} {}\r\n",
+                quoted(&team_uuid),
+                quoted(&channel.uuid),
+                quoted(&channel.name),
+                quoted(&channel.description)
+            );
+
+            CommandOutcome {
+                response: response(200, Some(&channel_response(&channel))),
+                info_events: team_subscriber_info_events(users, &team_uuid, info_payload),
+            }
         }
         Ok(ResourceContext::Channel {
             team_uuid,
@@ -112,13 +140,17 @@ pub fn handle_create(
             };
 
             let mut tree = storage.team_tree().clone();
-            let Some(thread_parent) = channel_index_mut(&mut tree, &team_uuid, &channel_uuid) else {
+            let Some(thread_parent) = channel_index_mut(&mut tree, &team_uuid, &channel_uuid)
+            else {
                 return CommandOutcome::response_only(response(404, Some(&quoted(&channel_uuid))));
             };
             thread_parent.threads.push(thread.clone());
             if let Err(err) = storage.replace_team_tree(tree) {
                 eprintln!("Failed to persist team tree: {}", err);
-                return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+                return CommandOutcome::response_only(response(
+                    500,
+                    Some("\"internal server error\""),
+                ));
             }
 
             call_event_thread_created(
@@ -128,7 +160,21 @@ pub fn handle_create(
                 &thread.title,
                 &thread.body,
             );
-            CommandOutcome::response_only(response(200, Some(&thread_response(&thread))))
+            let info_payload = format!(
+                "I100 NEW_THREAD {} {} {} {} {} {} {}\r\n",
+                quoted(&team_uuid),
+                quoted(&channel_uuid),
+                quoted(&thread.uuid),
+                quoted(user_uuid),
+                quoted(&thread.timestamp.to_string()),
+                quoted(&thread.title),
+                quoted(&thread.body)
+            );
+
+            CommandOutcome {
+                response: response(200, Some(&thread_response(&thread))),
+                info_events: team_subscriber_info_events(users, &team_uuid, info_payload),
+            }
         }
         Ok(ResourceContext::Thread {
             team_uuid,
@@ -154,17 +200,33 @@ pub fn handle_create(
             };
 
             let mut tree = storage.team_tree().clone();
-            let Some(thread_parent) = thread_index_mut(&mut tree, &team_uuid, &channel_uuid, &thread_uuid) else {
+            let Some(thread_parent) =
+                thread_index_mut(&mut tree, &team_uuid, &channel_uuid, &thread_uuid)
+            else {
                 return CommandOutcome::response_only(response(404, Some(&quoted(&thread_uuid))));
             };
             thread_parent.replies.push(reply.clone());
             if let Err(err) = storage.replace_team_tree(tree) {
                 eprintln!("Failed to persist team tree: {}", err);
-                return CommandOutcome::response_only(response(500, Some("\"internal server error\"")));
+                return CommandOutcome::response_only(response(
+                    500,
+                    Some("\"internal server error\""),
+                ));
             }
 
             call_event_reply_created(&thread_uuid, user_uuid, &reply.body);
-            CommandOutcome::response_only(response(200, Some(&reply_response(&thread_uuid, &reply))))
+            let info_payload = format!(
+                "I100 NEW_REPLY {} {} {} {}\r\n",
+                quoted(&team_uuid),
+                quoted(&thread_uuid),
+                quoted(user_uuid),
+                quoted(&reply.body)
+            );
+
+            CommandOutcome {
+                response: response(200, Some(&reply_response(&thread_uuid, &reply))),
+                info_events: team_subscriber_info_events(users, &team_uuid, info_payload),
+            }
         }
         Err(()) => CommandOutcome::response_only(bad_request()),
     }

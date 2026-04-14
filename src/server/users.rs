@@ -1,5 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -8,6 +9,8 @@ pub struct UserStore {
     by_name: HashMap<String, String>,
     by_uuid: HashMap<String, String>,
     online_sessions: HashMap<String, usize>,
+    team_subscribers: HashMap<String, HashSet<String>>,
+    user_subscriptions: HashMap<String, HashSet<String>>,
     sequence: u64,
 }
 
@@ -24,6 +27,8 @@ impl UserStore {
             by_name,
             by_uuid,
             online_sessions: HashMap::new(),
+            team_subscribers: HashMap::new(),
+            user_subscriptions: HashMap::new(),
             sequence: 0,
         }
     }
@@ -67,13 +72,7 @@ impl UserStore {
         let mut users = self
             .by_uuid
             .iter()
-            .map(|(uuid, name)| {
-                (
-                    uuid.clone(),
-                    name.clone(),
-                    self.is_online(uuid),
-                )
-            })
+            .map(|(uuid, name)| (uuid.clone(), name.clone(), self.is_online(uuid)))
             .collect::<Vec<_>>();
 
         users.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
@@ -81,13 +80,66 @@ impl UserStore {
     }
 
     pub fn user_details(&self, user_uuid: &str) -> Option<(String, bool)> {
-        self.by_uuid.get(user_uuid).map(|name| {
-            (name.clone(), self.is_online(user_uuid))
-        })
+        self.by_uuid
+            .get(user_uuid)
+            .map(|name| (name.clone(), self.is_online(user_uuid)))
+    }
+
+    pub fn subscribe_to_team(&mut self, user_uuid: &str, team_uuid: &str) {
+        self.team_subscribers
+            .entry(team_uuid.to_string())
+            .or_default()
+            .insert(user_uuid.to_string());
+
+        self.user_subscriptions
+            .entry(user_uuid.to_string())
+            .or_default()
+            .insert(team_uuid.to_string());
+    }
+
+    pub fn unsubscribe_from_team(&mut self, user_uuid: &str, team_uuid: &str) {
+        if let Some(subscribers) = self.team_subscribers.get_mut(team_uuid) {
+            subscribers.remove(user_uuid);
+            if subscribers.is_empty() {
+                self.team_subscribers.remove(team_uuid);
+            }
+        }
+
+        if let Some(teams) = self.user_subscriptions.get_mut(user_uuid) {
+            teams.remove(team_uuid);
+            if teams.is_empty() {
+                self.user_subscriptions.remove(user_uuid);
+            }
+        }
+    }
+
+    pub fn subscribed_team_ids(&self, user_uuid: &str) -> Vec<String> {
+        let mut teams = self
+            .user_subscriptions
+            .get(user_uuid)
+            .map(|values| values.iter().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        teams.sort();
+        teams
+    }
+
+    pub fn subscribed_user_ids(&self, team_uuid: &str) -> Vec<String> {
+        let mut users = self
+            .team_subscribers
+            .get(team_uuid)
+            .map(|values| values.iter().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        users.sort();
+        users
     }
 
     fn bump_online(&mut self, user_uuid: &str) {
-        let counter = self.online_sessions.entry(user_uuid.to_string()).or_insert(0);
+        let counter = self
+            .online_sessions
+            .entry(user_uuid.to_string())
+            .or_insert(0);
         *counter += 1;
     }
 

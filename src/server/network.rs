@@ -1,8 +1,8 @@
+use std::ffi::CString;
 use std::io::ErrorKind;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::os::fd::AsRawFd;
 use std::sync::atomic::Ordering;
-use std::ffi::CString;
 
 use super::commands::{
     command_registry, dispatch_line, emit_user_logged_out, InfoEvent, SessionState,
@@ -134,11 +134,11 @@ pub fn run_accept_loop(listener: &TcpListener) {
         default_teams_path(),
         default_messages_path(),
     ) {
-            Ok(storage) => storage,
-            Err(err) => {
-                eprintln!("Failed to initialize JSON storage: {}", err);
-                std::process::exit(1);
-            }
+        Ok(storage) => storage,
+        Err(err) => {
+            eprintln!("Failed to initialize JSON storage: {}", err);
+            std::process::exit(1);
+        }
     };
 
     let mut users = UserStore::from_pairs(storage.user_pairs());
@@ -208,7 +208,7 @@ pub fn run_accept_loop(listener: &TcpListener) {
             &mut clients,
             &pending_info_events,
             |session| session.state.user_uuid.as_deref(),
-            |session, payload| send_response(session, payload),
+            send_response,
         );
     }
 
