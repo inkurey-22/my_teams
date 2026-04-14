@@ -1,5 +1,6 @@
 use crate::commands::InfoEvent;
 
+/// Dispatch info events to matching client sessions.
 pub fn dispatch_info_events<Session, UserUuid, SendPayload>(
     sessions: &mut Vec<Session>,
     events: &[InfoEvent],

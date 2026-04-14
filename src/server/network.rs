@@ -17,6 +17,7 @@ use super::transport::{read_lines_nonblocking, write_nonblocking, ReadLinesResul
 use super::users::UserStore;
 use crate::poll::{wait as poll_wait, PollFd, POLLERR, POLLHUP, POLLIN, POLLNVAL};
 
+/// Bind the server listener socket on all interfaces.
 pub fn create_listener(port_arg: &str, port: u16) -> TcpListener {
     let addr = format!("0.0.0.0:{}", port);
     match TcpListener::bind(addr) {
@@ -28,6 +29,7 @@ pub fn create_listener(port_arg: &str, port: u16) -> TcpListener {
     }
 }
 
+/// Put the listener socket into non-blocking mode.
 pub fn configure_listener(listener: &TcpListener) {
     if let Err(err) = listener.set_nonblocking(true) {
         eprintln!("Failed to configure server socket: {}", err);
@@ -126,6 +128,7 @@ fn handle_client(
     }
 }
 
+/// Run the main accept loop for the server.
 pub fn run_accept_loop(listener: &TcpListener) {
     let mut clients: Vec<ClientSession> = Vec::new();
     let commands = command_registry();

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io;
 use std::net::TcpStream;
 
+/// Commands that are waiting for a server response.
 #[derive(Clone)]
 pub enum PendingRequest {
     Login {
@@ -75,28 +76,43 @@ pub enum PendingRequest {
     },
 }
 
+/// The current command path selected by `USE`.
 #[derive(Default)]
 pub struct CommandContext {
+    /// Active team UUID, if any.
     pub team_uuid: Option<String>,
+    /// Active channel UUID, if any.
     pub channel_uuid: Option<String>,
+    /// Active thread UUID, if any.
     pub thread_uuid: Option<String>,
 }
 
+/// Mutable client session state shared across command handlers.
 #[derive(Default)]
 pub struct SessionState {
+    /// Logged-in user name, if known.
     pub user_name: Option<String>,
+    /// Logged-in user UUID, if known.
     pub user_uuid: Option<String>,
+    /// Selected team/channel/thread context.
     pub context: CommandContext,
+    /// Request that is awaiting a response.
     pub pending_request: Option<PendingRequest>,
 }
 
+/// Registry of client command definitions keyed by command name.
 pub type CommandMap = HashMap<&'static str, CommandDefinition>;
 
+/// Signature for a client command handler.
 pub type CommandHandler =
     fn(&mut SessionState, &CommandMap, &mut TcpStream, &[String]) -> io::Result<()>;
 
+/// Metadata and handler for a single client command.
 pub struct CommandDefinition {
+    /// Usage string shown in help output.
     pub usage: &'static str,
+    /// Short description of the command.
     pub description: &'static str,
+    /// Function that executes the command.
     pub handler: CommandHandler,
 }

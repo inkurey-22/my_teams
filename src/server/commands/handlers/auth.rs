@@ -9,6 +9,7 @@ use super::shared::{
     validate_arg_count, validate_max_len, MAX_BODY_LENGTH, MAX_NAME_LENGTH,
 };
 
+/// Show the server command help output.
 pub fn handle_help(
     _state: &mut SessionState,
     registry: &CommandMap,
@@ -34,6 +35,7 @@ pub fn handle_help(
     CommandOutcome::response_only(response(200, Some(&quoted(&body))))
 }
 
+/// Log a user in and return the assigned UUID.
 pub fn handle_login(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -63,6 +65,7 @@ pub fn handle_login(
     CommandOutcome::response_only(response(200, Some(&quoted(&user_uuid))))
 }
 
+/// Log the current user out.
 pub fn handle_logout(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -82,6 +85,7 @@ pub fn handle_logout(
     CommandOutcome::response_only(response(200, None))
 }
 
+/// List all users on the server.
 pub fn handle_users(
     _state: &mut SessionState,
     _registry: &CommandMap,
@@ -103,6 +107,7 @@ pub fn handle_users(
     CommandOutcome::response_only(response(200, Some(&chunks.join(" "))))
 }
 
+/// Show details for a specific user UUID.
 pub fn handle_user(
     _state: &mut SessionState,
     _registry: &CommandMap,
@@ -130,6 +135,7 @@ pub fn handle_user(
     CommandOutcome::response_only(response(200, Some(&body)))
 }
 
+/// Store and broadcast a private message.
 pub fn handle_send(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -180,6 +186,7 @@ pub fn handle_send(
     }
 }
 
+/// List the private conversation with another user.
 pub fn handle_messages(
     state: &mut SessionState,
     _registry: &CommandMap,

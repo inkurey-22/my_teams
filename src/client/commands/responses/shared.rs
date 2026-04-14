@@ -4,6 +4,7 @@ use std::os::raw::c_int;
 
 use crate::libcli;
 
+/// Parse a user online/offline flag from the wire protocol.
 pub(super) fn parse_status(status: &str) -> io::Result<c_int> {
     match status {
         "0" => Ok(0),
@@ -15,6 +16,7 @@ pub(super) fn parse_status(status: &str) -> io::Result<c_int> {
     }
 }
 
+/// Parse a timestamp value from the wire protocol.
 pub(super) fn parse_timestamp(timestamp: &str) -> io::Result<libcli::TimeT> {
     timestamp.parse::<libcli::TimeT>().map_err(|_| {
         io::Error::new(
@@ -24,6 +26,7 @@ pub(super) fn parse_timestamp(timestamp: &str) -> io::Result<libcli::TimeT> {
     })
 }
 
+/// Convert a Rust string to a C string for FFI calls.
 pub(super) fn cstring(value: &str, field: &str) -> io::Result<CString> {
     CString::new(value).map_err(|_| {
         io::Error::new(
@@ -33,6 +36,7 @@ pub(super) fn cstring(value: &str, field: &str) -> io::Result<CString> {
     })
 }
 
+/// Invoke the C callback used to print a team-like record.
 pub(super) fn invoke_team_print(
     callback: unsafe extern "C" fn(
         *const std::os::raw::c_char,
@@ -58,6 +62,7 @@ pub(super) fn invoke_team_print(
     Ok(())
 }
 
+/// Invoke the C callback used to print a channel-like record.
 pub(super) fn invoke_channel_print(
     callback: unsafe extern "C" fn(
         *const std::os::raw::c_char,
@@ -83,6 +88,7 @@ pub(super) fn invoke_channel_print(
     Ok(())
 }
 
+/// Invoke the C callback used to print a thread-like record.
 pub(super) fn invoke_thread_print(
     callback: unsafe extern "C" fn(
         *const std::os::raw::c_char,
@@ -116,6 +122,7 @@ pub(super) fn invoke_thread_print(
     Ok(())
 }
 
+/// Invoke the C callback used to print a reply-like record.
 pub(super) fn invoke_reply_print(
     callback: unsafe extern "C" fn(
         *const std::os::raw::c_char,
@@ -145,20 +152,24 @@ pub(super) fn invoke_reply_print(
     Ok(())
 }
 
+/// Build an error for an unexpected server response.
 pub(super) fn invalid_response(response: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, response.to_string())
 }
 
+/// Build an error for a malformed response payload.
 pub(super) fn invalid_payload(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }
 
+/// Notify the client that the request was unauthorized.
 pub(super) fn handle_unauthorized() {
     unsafe {
         let _ = libcli::client_error_unauthorized();
     }
 }
 
+/// Notify the client that a user UUID was not found.
 pub(super) fn handle_unknown_user(user_uuid: &str) -> io::Result<()> {
     let target_cstr = CString::new(user_uuid).map_err(|_| {
         io::Error::new(
@@ -172,6 +183,7 @@ pub(super) fn handle_unknown_user(user_uuid: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Notify the client that a team UUID was not found.
 pub(super) fn handle_unknown_team(team_uuid: &str) -> io::Result<()> {
     let team_cstr = CString::new(team_uuid).map_err(|_| {
         io::Error::new(
@@ -185,6 +197,7 @@ pub(super) fn handle_unknown_team(team_uuid: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Notify the client that a channel UUID was not found.
 pub(super) fn handle_unknown_channel(channel_uuid: &str) -> io::Result<()> {
     let channel_cstr = CString::new(channel_uuid).map_err(|_| {
         io::Error::new(
@@ -198,6 +211,7 @@ pub(super) fn handle_unknown_channel(channel_uuid: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Notify the client that a thread UUID was not found.
 pub(super) fn handle_unknown_thread(thread_uuid: &str) -> io::Result<()> {
     let thread_cstr = CString::new(thread_uuid).map_err(|_| {
         io::Error::new(

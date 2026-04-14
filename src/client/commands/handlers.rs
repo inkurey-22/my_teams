@@ -1,3 +1,5 @@
+//! Client-side command handlers that build and send wire-protocol requests.
+
 use std::io::{self, Write};
 use std::net::TcpStream;
 
@@ -83,6 +85,7 @@ fn send_request(stream: &mut TcpStream, request: String) -> io::Result<()> {
     stream.write_all(request.as_bytes())
 }
 
+/// Show the list of available client commands.
 pub fn handle_help(
     _state: &mut SessionState,
     registry: &CommandMap,
@@ -101,6 +104,7 @@ pub fn handle_help(
     Ok(())
 }
 
+/// Send a login request for the supplied user name.
 pub fn handle_login(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -121,6 +125,7 @@ pub fn handle_login(
     Ok(())
 }
 
+/// Send a logout request.
 pub fn handle_logout(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -137,6 +142,7 @@ pub fn handle_logout(
     Ok(())
 }
 
+/// Request the full user list from the server.
 pub fn handle_users(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -152,6 +158,7 @@ pub fn handle_users(
     Ok(())
 }
 
+/// Request details for a specific user UUID.
 pub fn handle_user(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -170,6 +177,7 @@ pub fn handle_user(
     Ok(())
 }
 
+/// Send a private message request.
 pub fn handle_send(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -192,6 +200,7 @@ pub fn handle_send(
     Ok(())
 }
 
+/// Request the message history for a user.
 pub fn handle_messages(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -211,6 +220,7 @@ pub fn handle_messages(
     Ok(())
 }
 
+/// Subscribe to team updates.
 pub fn handle_subscribe(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -228,6 +238,7 @@ pub fn handle_subscribe(
     Ok(())
 }
 
+/// Request subscribed users or teams.
 pub fn handle_subscribed(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -243,6 +254,7 @@ pub fn handle_subscribed(
     Ok(())
 }
 
+/// Unsubscribe from team updates.
 pub fn handle_unsubscribe(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -260,6 +272,7 @@ pub fn handle_unsubscribe(
     Ok(())
 }
 
+/// Change the current team, channel, or thread context.
 pub fn handle_use(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -277,6 +290,7 @@ pub fn handle_use(
     Ok(())
 }
 
+/// Create a team, channel, thread, or reply in the current context.
 pub fn handle_create(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -329,6 +343,7 @@ pub fn handle_create(
     Ok(())
 }
 
+/// List teams, channels, threads, or replies for the current context.
 pub fn handle_list(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -371,6 +386,7 @@ pub fn handle_list(
     Ok(())
 }
 
+/// Request information about the current user or selected resource.
 pub fn handle_info(
     state: &mut SessionState,
     _registry: &CommandMap,

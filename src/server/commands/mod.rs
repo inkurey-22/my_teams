@@ -1,3 +1,13 @@
+//! Server command pipeline.
+//!
+//! This module groups the request parser, dispatch layer, command registry,
+//! and the command handlers that mutate storage and session state.
+//!
+//! The public surface is intentionally small:
+//! - `dispatch_line` parses and routes one request.
+//! - `command_registry` provides the built-in command table.
+//! - `SessionState` carries per-client context across requests.
+
 mod dispatcher;
 mod handlers;
 mod registry;

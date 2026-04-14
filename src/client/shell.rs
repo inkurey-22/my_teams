@@ -215,6 +215,7 @@ fn process_pending_input(
     Ok(())
 }
 
+/// Run the interactive client shell loop.
 pub fn run_shell(stream: &mut TcpStream) {
     if let Err(err) = stream.set_nonblocking(true) {
         eprintln!("failed to configure client socket: {}", err);

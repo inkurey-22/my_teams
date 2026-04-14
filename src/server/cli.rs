@@ -1,8 +1,10 @@
+/// Print usage for the server CLI.
 fn print_usage() {
     println!("USAGE: ./myteams_server port");
     println!("port is the port number on which the server socket listens.");
 }
 
+/// Parse the server command-line arguments and extract the listening port.
 pub fn parse_port_arg(args: &[String]) -> Option<(String, u16)> {
     if args.len() == 2 && args[1] == "--help" {
         print_usage();

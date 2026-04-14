@@ -1,3 +1,5 @@
+//! Client response handlers for login, user, and message commands.
+
 use std::ffi::CString;
 use std::io;
 
@@ -10,6 +12,7 @@ use super::shared::{
     parse_status, parse_timestamp,
 };
 
+/// Handle a login response and update the cached session state.
 pub(super) fn handle_login_response(
     state: &mut SessionState,
     code: u16,
@@ -40,6 +43,7 @@ pub(super) fn handle_login_response(
     Ok(())
 }
 
+/// Handle a logout response and clear the cached session state.
 pub(super) fn handle_logout_response(
     state: &mut SessionState,
     code: u16,
@@ -70,6 +74,7 @@ pub(super) fn handle_logout_response(
     Ok(())
 }
 
+/// Handle a users listing response and print each entry.
 pub(super) fn handle_users_response(code: u16, response: &str) -> io::Result<()> {
     if code == 401 {
         handle_unauthorized();
@@ -104,6 +109,7 @@ pub(super) fn handle_users_response(code: u16, response: &str) -> io::Result<()>
     Ok(())
 }
 
+/// Handle a user detail response and print the selected user.
 pub(super) fn handle_user_response(code: u16, response: &str, user_uuid: String) -> io::Result<()> {
     if code == 401 {
         handle_unauthorized();
@@ -137,6 +143,7 @@ pub(super) fn handle_user_response(code: u16, response: &str, user_uuid: String)
     Ok(())
 }
 
+/// Handle a send response and surface any server-side errors.
 pub(super) fn handle_send_response(code: u16, response: &str, user_uuid: String) -> io::Result<()> {
     if code == 401 {
         handle_unauthorized();
@@ -153,6 +160,7 @@ pub(super) fn handle_send_response(code: u16, response: &str, user_uuid: String)
     Ok(())
 }
 
+/// Handle a message history response and print each message.
 pub(super) fn handle_messages_response(
     code: u16,
     response: &str,

@@ -1,3 +1,5 @@
+//! Shared helpers used by server command handlers.
+
 use std::ffi::CString;
 use std::hash::{Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -12,30 +14,44 @@ pub(crate) const MAX_NAME_LENGTH: usize = 32;
 pub(crate) const MAX_DESCRIPTION_LENGTH: usize = 255;
 pub(crate) const MAX_BODY_LENGTH: usize = 512;
 
+/// The current resource scope selected by the session context.
 pub(crate) enum ResourceContext {
+    /// No team, channel, or thread is selected.
     Root,
+    /// A team is selected.
     Team {
+        /// Selected team UUID.
         team_uuid: String,
     },
+    /// A team and channel are selected.
     Channel {
+        /// Selected team UUID.
         team_uuid: String,
+        /// Selected channel UUID.
         channel_uuid: String,
     },
+    /// A team, channel, and thread are selected.
     Thread {
+        /// Selected team UUID.
         team_uuid: String,
+        /// Selected channel UUID.
         channel_uuid: String,
+        /// Selected thread UUID.
         thread_uuid: String,
     },
 }
 
+/// Build the standard bad-request response line.
 pub(crate) fn bad_request() -> String {
     response(501, Some("\"bad request\""))
 }
 
+/// Build a standard unknown-user response line.
 pub(crate) fn unknown_user(user_uuid: &str) -> String {
     response(404, Some(&quoted(user_uuid)))
 }
 
+/// Return the current UNIX timestamp in seconds.
 pub(crate) fn now_unix_timestamp() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -43,6 +59,7 @@ pub(crate) fn now_unix_timestamp() -> i64 {
         .unwrap_or(0)
 }
 
+/// Generate a UUID-like identifier derived from a seed and sequence number.
 pub(crate) fn make_uuid_v4_like(seed: &str, sequence: u64) -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -89,6 +106,7 @@ pub(crate) fn make_uuid_v4_like(seed: &str, sequence: u64) -> String {
     )
 }
 
+/// Convert the session context into a concrete resource scope.
 pub(crate) fn current_context(state: &SessionState) -> Result<ResourceContext, ()> {
     match (
         state.context.team_uuid.as_ref(),
@@ -112,10 +130,12 @@ pub(crate) fn current_context(state: &SessionState) -> Result<ResourceContext, (
     }
 }
 
+/// Convert a Rust string to a C string if it contains no NUL bytes.
 pub(crate) fn cstring(value: &str) -> Option<CString> {
     CString::new(value).ok()
 }
 
+/// Notify the C bridge that a team was created.
 pub(crate) fn call_event_team_created(team_uuid: &str, team_name: &str, user_uuid: &str) {
     let (Some(team_uuid), Some(team_name), Some(user_uuid)) =
         (cstring(team_uuid), cstring(team_name), cstring(user_uuid))
@@ -132,6 +152,7 @@ pub(crate) fn call_event_team_created(team_uuid: &str, team_name: &str, user_uui
     }
 }
 
+/// Notify the C bridge that a channel was created.
 pub(crate) fn call_event_channel_created(team_uuid: &str, channel_uuid: &str, channel_name: &str) {
     let (Some(team_uuid), Some(channel_uuid), Some(channel_name)) = (
         cstring(team_uuid),
@@ -150,6 +171,7 @@ pub(crate) fn call_event_channel_created(team_uuid: &str, channel_uuid: &str, ch
     }
 }
 
+/// Notify the C bridge that a thread was created.
 pub(crate) fn call_event_thread_created(
     channel_uuid: &str,
     thread_uuid: &str,
@@ -185,6 +207,7 @@ pub(crate) fn call_event_thread_created(
     }
 }
 
+/// Notify the C bridge that a reply was created.
 pub(crate) fn call_event_reply_created(thread_uuid: &str, user_uuid: &str, reply_body: &str) {
     let (Some(thread_uuid), Some(user_uuid), Some(reply_body)) = (
         cstring(thread_uuid),
@@ -203,6 +226,7 @@ pub(crate) fn call_event_reply_created(thread_uuid: &str, user_uuid: &str, reply
     }
 }
 
+/// Notify the C bridge that a user subscribed to a team.
 pub(crate) fn call_event_user_subscribed(team_uuid: &str, user_uuid: &str) {
     let (Some(team_uuid), Some(user_uuid)) = (cstring(team_uuid), cstring(user_uuid)) else {
         return;
@@ -213,6 +237,7 @@ pub(crate) fn call_event_user_subscribed(team_uuid: &str, user_uuid: &str) {
     }
 }
 
+/// Notify the C bridge that a user unsubscribed from a team.
 pub(crate) fn call_event_user_unsubscribed(team_uuid: &str, user_uuid: &str) {
     let (Some(team_uuid), Some(user_uuid)) = (cstring(team_uuid), cstring(user_uuid)) else {
         return;
@@ -223,6 +248,7 @@ pub(crate) fn call_event_user_unsubscribed(team_uuid: &str, user_uuid: &str) {
     }
 }
 
+/// Notify the C bridge that a user was created.
 pub(crate) fn call_event_user_created(user_uuid: &str, user_name: &str) {
     let Ok(uuid) = CString::new(user_uuid) else {
         return;
@@ -236,6 +262,7 @@ pub(crate) fn call_event_user_created(user_uuid: &str, user_name: &str) {
     }
 }
 
+/// Notify the C bridge that a user logged in.
 pub(crate) fn call_event_user_logged_in(user_uuid: &str) {
     let Ok(uuid) = CString::new(user_uuid) else {
         return;
@@ -246,6 +273,7 @@ pub(crate) fn call_event_user_logged_in(user_uuid: &str) {
     }
 }
 
+/// Notify the C bridge that a private message was sent.
 pub(crate) fn call_event_private_message_sended(
     sender_uuid: &str,
     recipient_uuid: &str,
@@ -268,6 +296,7 @@ pub(crate) fn call_event_private_message_sended(
     }
 }
 
+/// Notify the C bridge that a user logged out.
 pub fn emit_user_logged_out(user_uuid: &str) {
     let Ok(uuid) = CString::new(user_uuid) else {
         return;
@@ -278,6 +307,7 @@ pub fn emit_user_logged_out(user_uuid: &str) {
     }
 }
 
+/// Validate that the argument count falls within the accepted range.
 pub(crate) fn validate_arg_count(args: &[String], min: usize, max: usize) -> Result<(), String> {
     if args.len() < min || args.len() > max {
         return Err(bad_request());
@@ -285,10 +315,12 @@ pub(crate) fn validate_arg_count(args: &[String], min: usize, max: usize) -> Res
     Ok(())
 }
 
+/// Check whether a string fits within a maximum character length.
 pub(crate) fn validate_max_len(value: &str, max: usize) -> bool {
     value.chars().count() <= max
 }
 
+/// Find a mutable reference to a team entry.
 pub(crate) fn team_index_mut<'a>(
     tree: &'a mut TeamTree,
     team_uuid: &str,
@@ -296,6 +328,7 @@ pub(crate) fn team_index_mut<'a>(
     tree.teams.iter_mut().find(|team| team.uuid == team_uuid)
 }
 
+/// Find a mutable reference to a channel entry.
 pub(crate) fn channel_index_mut<'a>(
     tree: &'a mut TeamTree,
     team_uuid: &str,
@@ -308,6 +341,7 @@ pub(crate) fn channel_index_mut<'a>(
     })
 }
 
+/// Find a mutable reference to a thread entry.
 pub(crate) fn thread_index_mut<'a>(
     tree: &'a mut TeamTree,
     team_uuid: &str,
@@ -322,6 +356,7 @@ pub(crate) fn thread_index_mut<'a>(
     })
 }
 
+/// Format a team entry as a response body.
 pub(crate) fn team_response(team: &TeamEntry) -> String {
     [
         quoted("TEAM"),
@@ -332,6 +367,7 @@ pub(crate) fn team_response(team: &TeamEntry) -> String {
     .join(" ")
 }
 
+/// Format a channel entry as a response body.
 pub(crate) fn channel_response(channel: &ChannelEntry) -> String {
     [
         quoted("CHANNEL"),
@@ -342,6 +378,7 @@ pub(crate) fn channel_response(channel: &ChannelEntry) -> String {
     .join(" ")
 }
 
+/// Format a thread entry as a response body.
 pub(crate) fn thread_response(thread: &ThreadEntry) -> String {
     [
         quoted("THREAD"),
@@ -354,6 +391,7 @@ pub(crate) fn thread_response(thread: &ThreadEntry) -> String {
     .join(" ")
 }
 
+/// Format a reply entry as a response body.
 pub(crate) fn reply_response(thread_uuid: &str, reply: &ReplyEntry) -> String {
     [
         quoted("REPLY"),
@@ -365,6 +403,7 @@ pub(crate) fn reply_response(thread_uuid: &str, reply: &ReplyEntry) -> String {
     .join(" ")
 }
 
+/// Fetch the current user details from the session and user store.
 pub(crate) fn current_user_details(
     state: &SessionState,
     users: &UserStore,
@@ -374,12 +413,14 @@ pub(crate) fn current_user_details(
     Some((user_uuid.clone(), user_name, is_online))
 }
 
+/// Update the session context from parsed arguments.
 pub(crate) fn set_context(state: &mut SessionState, args: &[String]) {
     state.context.team_uuid = args.first().cloned();
     state.context.channel_uuid = args.get(1).cloned();
     state.context.thread_uuid = args.get(2).cloned();
 }
 
+/// Validate the requested `USE` context against storage.
 pub(crate) fn validate_use_context(storage: &ServerStorage, args: &[String]) -> Result<(), String> {
     if args.iter().any(|arg| arg.is_empty()) {
         return Err(String::new());

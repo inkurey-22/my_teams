@@ -9,62 +9,97 @@ use myteams_json::{
     read_json_value, stringify_json_value, write_json_value, JsonIoError, JsonObject, JsonValue,
 };
 
+/// A user record persisted in JSON storage.
 #[derive(Debug, Clone)]
 pub struct UserEntry {
+    /// User display name.
     pub name: String,
+    /// Stable user UUID.
     pub uuid: String,
 }
 
+/// A private message record persisted in JSON storage.
 #[derive(Debug, Clone)]
 pub struct MessageEntry {
+    /// Sender UUID.
     pub sender_uuid: String,
+    /// Recipient UUID.
     pub recipient_uuid: String,
+    /// Message timestamp.
     pub timestamp: i64,
+    /// Message body.
     pub body: String,
 }
 
+/// A reply record persisted in JSON storage.
 #[derive(Debug, Clone)]
 pub struct ReplyEntry {
+    /// Reply author UUID.
     pub user_uuid: String,
+    /// Reply timestamp.
     pub timestamp: i64,
+    /// Reply body.
     pub body: String,
 }
 
+/// A thread record containing nested replies.
 #[derive(Debug, Clone)]
 pub struct ThreadEntry {
+    /// Thread UUID.
     pub uuid: String,
+    /// Thread author UUID.
     pub user_uuid: String,
+    /// Thread timestamp.
     pub timestamp: i64,
+    /// Thread title.
     pub title: String,
+    /// Thread body.
     pub body: String,
+    /// Replies attached to the thread.
     pub replies: Vec<ReplyEntry>,
 }
 
+/// A channel record containing nested threads.
 #[derive(Debug, Clone)]
 pub struct ChannelEntry {
+    /// Channel UUID.
     pub uuid: String,
+    /// Channel name.
     pub name: String,
+    /// Channel description.
     pub description: String,
+    /// Threads attached to the channel.
     pub threads: Vec<ThreadEntry>,
 }
 
+/// A team record containing nested channels.
 #[derive(Debug, Clone)]
 pub struct TeamEntry {
+    /// Team UUID.
     pub uuid: String,
+    /// Team name.
     pub name: String,
+    /// Team description.
     pub description: String,
+    /// Channels attached to the team.
     pub channels: Vec<ChannelEntry>,
 }
 
+/// The complete nested team/channel/thread tree.
 #[derive(Debug, Clone, Default)]
 pub struct TeamTree {
+    /// All known teams.
     pub teams: Vec<TeamEntry>,
 }
 
+/// Errors produced while loading or saving server storage.
 #[derive(Debug)]
 pub enum StorageError {
+    /// File-system failure.
     Io(io::Error),
+    /// JSON parsing or writing failure.
     Json(JsonIoError),
+    /// Data did not match the expected storage schema.
     Schema(String),
 }
 
@@ -92,6 +127,7 @@ impl From<JsonIoError> for StorageError {
     }
 }
 
+/// In-memory representation of the persistent server state.
 pub struct ServerStorage {
     users_path: PathBuf,
     teams_path: PathBuf,
@@ -102,6 +138,7 @@ pub struct ServerStorage {
 }
 
 impl ServerStorage {
+    /// Load storage from disk or create empty defaults if the files are missing.
     pub fn load_or_default<P1, P2, P3>(
         users_path: P1,
         teams_path: P2,
@@ -632,18 +669,22 @@ fn expect_i64_field_or_default(obj: &JsonObject, field: &str) -> Result<i64, Sto
     }
 }
 
+/// Default path for the users JSON file.
 pub fn default_users_path() -> &'static str {
     "data/users.json"
 }
 
+/// Default path for the teams JSON file.
 pub fn default_teams_path() -> &'static str {
     "data/teams.json"
 }
 
+/// Default path for the messages JSON file.
 pub fn default_messages_path() -> &'static str {
     "data/messages.json"
 }
 
+/// Serialize the team tree into compact JSON text.
 pub fn dump_team_tree(tree: &TeamTree) -> String {
     stringify_json_value(&teams_to_json_value(tree))
 }

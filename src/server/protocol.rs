@@ -1,7 +1,10 @@
 use std::io;
 
+/// Parsed client request line.
 pub struct ParsedCommand {
+    /// Uppercase command name.
     pub name: String,
+    /// Remaining quoted or plain arguments.
     pub args: Vec<String>,
 }
 
@@ -48,6 +51,7 @@ fn tokenize(input: &str) -> io::Result<Vec<String>> {
     Ok(tokens)
 }
 
+/// Parse a client request line into a command name and argument list.
 pub fn parse_request_line(line: &str) -> io::Result<ParsedCommand> {
     let mut parts = line.trim().splitn(2, char::is_whitespace);
     let header = parts
@@ -83,6 +87,7 @@ fn quote_argument(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Format a server response line.
 pub fn response(code: u16, body: Option<&str>) -> String {
     match body {
         Some(text) => format!("R{:03} {}\r\n", code, text),
@@ -90,6 +95,7 @@ pub fn response(code: u16, body: Option<&str>) -> String {
     }
 }
 
+/// Quote and escape a response argument.
 pub fn quoted(value: &str) -> String {
     format!("\"{}\"", quote_argument(value))
 }

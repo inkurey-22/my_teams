@@ -1,3 +1,14 @@
+//! Client response handlers.
+//!
+//! The client keeps one outstanding request at a time. This module owns the
+//! response dispatch step that inspects the pending request, parses the server
+//! reply, and forwards the data to the appropriate FFI callback.
+//!
+//! Each submodule handles one part of the protocol:
+//! - `auth` for login, logout, users, and private messages.
+//! - `context` for subscribe, subscribed, unsubscribe, and use.
+//! - `resources` for create, list, and info commands.
+
 use std::io;
 
 use crate::commands::protocol::parse_response_code;
@@ -16,6 +27,7 @@ fn handle_no_pending_response(code: u16, response: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Handle a server response for the current pending request.
 pub fn handle_response_line(state: &mut SessionState, response: &str) -> io::Result<()> {
     let code = parse_response_code(response)?;
     let pending_request = state.pending_request.take();

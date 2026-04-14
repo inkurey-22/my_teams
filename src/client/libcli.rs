@@ -2,6 +2,7 @@
 
 use std::os::raw::{c_char, c_int, c_long};
 
+/// Platform `time_t` equivalent used by the client event bridge.
 pub type TimeT = c_long;
 
 unsafe extern "C" {

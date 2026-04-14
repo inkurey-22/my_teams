@@ -1,3 +1,5 @@
+//! Client response handlers for subscribe and context-changing commands.
+
 use std::io;
 
 use crate::commands::protocol::parse_response_tokens;
@@ -9,6 +11,7 @@ use super::shared::{
     handle_unknown_thread, invalid_payload, invalid_response, invoke_team_print, parse_status,
 };
 
+/// Handle a subscribe response and print the subscription event.
 pub(super) fn handle_subscribe_response(
     code: u16,
     response: &str,
@@ -41,6 +44,7 @@ pub(super) fn handle_subscribe_response(
     Ok(())
 }
 
+/// Handle a subscribed response and print either teams or users.
 pub(super) fn handle_subscribed_response(
     code: u16,
     response: &str,
@@ -105,6 +109,7 @@ pub(super) fn handle_subscribed_response(
     Ok(())
 }
 
+/// Handle an unsubscribe response and print the unsubscription event.
 pub(super) fn handle_unsubscribe_response(
     code: u16,
     response: &str,
@@ -137,6 +142,7 @@ pub(super) fn handle_unsubscribe_response(
     Ok(())
 }
 
+/// Handle a use response and update the local command context.
 pub(super) fn handle_use_response(
     state: &mut SessionState,
     code: u16,

@@ -1,6 +1,7 @@
 use crate::commands::handlers;
 use crate::commands::{CommandDefinition, CommandMap};
 
+/// Build the server command registry.
 pub fn command_registry() -> CommandMap {
     CommandMap::from([
         (

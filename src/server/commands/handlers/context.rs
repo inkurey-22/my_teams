@@ -8,6 +8,7 @@ use super::shared::{
     validate_arg_count, validate_use_context,
 };
 
+/// Subscribe the current user to a team.
 pub fn handle_subscribe(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -35,6 +36,7 @@ pub fn handle_subscribe(
     CommandOutcome::response_only(response(200, Some(&body)))
 }
 
+/// List subscribed users for a team or teams for the current user.
 pub fn handle_subscribed(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -83,6 +85,7 @@ pub fn handle_subscribed(
     CommandOutcome::response_only(response(200, Some(&chunks.join(" "))))
 }
 
+/// Unsubscribe the current user from a team.
 pub fn handle_unsubscribe(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -110,6 +113,7 @@ pub fn handle_unsubscribe(
     CommandOutcome::response_only(response(200, Some(&body)))
 }
 
+/// Update the current team/channel/thread context.
 pub fn handle_use(
     state: &mut SessionState,
     _registry: &CommandMap,

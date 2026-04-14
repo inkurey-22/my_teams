@@ -1,3 +1,5 @@
+//! Client response handlers for create, list, and info resource commands.
+
 use std::io;
 
 use crate::commands::protocol::parse_response_tokens;
@@ -9,6 +11,7 @@ use super::shared::{
     invoke_thread_print, parse_status,
 };
 
+/// Handle a team creation response and print the created team.
 pub(super) fn handle_create_team_response(code: u16, response: &str) -> io::Result<()> {
     if code == 401 {
         handle_unauthorized();
@@ -37,6 +40,7 @@ pub(super) fn handle_create_team_response(code: u16, response: &str) -> io::Resu
     )
 }
 
+/// Handle a channel creation response and print the created channel.
 pub(super) fn handle_create_channel_response(
     code: u16,
     response: &str,
@@ -73,6 +77,7 @@ pub(super) fn handle_create_channel_response(
     )
 }
 
+/// Handle a thread creation response and print the created thread.
 pub(super) fn handle_create_thread_response(
     code: u16,
     response: &str,
@@ -113,6 +118,7 @@ pub(super) fn handle_create_thread_response(
     )
 }
 
+/// Handle a reply creation response and print the created reply.
 pub(super) fn handle_create_reply_response(
     code: u16,
     response: &str,
@@ -148,6 +154,7 @@ pub(super) fn handle_create_reply_response(
     )
 }
 
+/// Handle a team listing response and print each team.
 pub(super) fn handle_list_teams_response(code: u16, response: &str) -> io::Result<()> {
     if code == 401 {
         handle_unauthorized();
@@ -174,6 +181,7 @@ pub(super) fn handle_list_teams_response(code: u16, response: &str) -> io::Resul
     Ok(())
 }
 
+/// Handle a channel listing response and print each channel.
 pub(super) fn handle_list_channels_response(
     code: u16,
     response: &str,
@@ -208,6 +216,7 @@ pub(super) fn handle_list_channels_response(
     Ok(())
 }
 
+/// Handle a thread listing response and print each thread.
 pub(super) fn handle_list_threads_response(
     code: u16,
     response: &str,
@@ -246,6 +255,7 @@ pub(super) fn handle_list_threads_response(
     Ok(())
 }
 
+/// Handle a reply listing response and print each reply.
 pub(super) fn handle_list_replies_response(
     code: u16,
     response: &str,
@@ -285,6 +295,7 @@ pub(super) fn handle_list_replies_response(
     Ok(())
 }
 
+/// Handle an info-user response and print the current user.
 pub(super) fn handle_info_user_response(code: u16, response: &str) -> io::Result<()> {
     if code == 401 {
         handle_unauthorized();
@@ -313,6 +324,7 @@ pub(super) fn handle_info_user_response(code: u16, response: &str) -> io::Result
     Ok(())
 }
 
+/// Handle an info-team response and print the selected team.
 pub(super) fn handle_info_team_response(
     code: u16,
     response: &str,
@@ -343,6 +355,7 @@ pub(super) fn handle_info_team_response(
     )
 }
 
+/// Handle an info-channel response and print the selected channel.
 pub(super) fn handle_info_channel_response(
     code: u16,
     response: &str,
@@ -375,6 +388,7 @@ pub(super) fn handle_info_channel_response(
     )
 }
 
+/// Handle an info-thread response and print the selected thread.
 pub(super) fn handle_info_thread_response(
     code: u16,
     response: &str,

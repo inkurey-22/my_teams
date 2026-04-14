@@ -3,6 +3,7 @@ use crate::protocol::{parse_request_line, response};
 use crate::storage::ServerStorage;
 use crate::users::UserStore;
 
+/// Parse a request line and dispatch it to the matching server command.
 pub fn dispatch_line(
     state: &mut SessionState,
     commands: &CommandMap,

@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Global shutdown flag set by the SIGINT handler.
 pub static SHOULD_STOP: AtomicBool = AtomicBool::new(false);
 const SIGINT: i32 = 2;
 
@@ -11,6 +12,7 @@ extern "C" fn handle_sigint(_signal: i32) {
     SHOULD_STOP.store(true, Ordering::SeqCst);
 }
 
+/// Install the server SIGINT handler.
 pub fn install_sigint_handler() {
     unsafe {
         let _ = signal(SIGINT, handle_sigint);

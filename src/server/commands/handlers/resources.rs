@@ -22,6 +22,7 @@ fn team_subscriber_info_events(users: &UserStore, team_uuid: &str, payload: Stri
         .collect()
 }
 
+/// Create a team, channel, thread, or reply in the current context.
 pub fn handle_create(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -232,6 +233,7 @@ pub fn handle_create(
     }
 }
 
+/// List teams, channels, threads, or replies for the current context.
 pub fn handle_list(
     state: &mut SessionState,
     _registry: &CommandMap,
@@ -311,6 +313,7 @@ pub fn handle_list(
     CommandOutcome::response_only(response(200, Some(&body)))
 }
 
+/// Show details for the current user or selected resource.
 pub fn handle_info(
     state: &mut SessionState,
     _registry: &CommandMap,

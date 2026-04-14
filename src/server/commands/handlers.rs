@@ -1,3 +1,11 @@
+//! Server command handler exports.
+//!
+//! The actual implementations are split by concern:
+//! - `auth` handles user/session operations.
+//! - `context` handles subscribe and `USE` state.
+//! - `resources` handles create, list, and info operations.
+//! - `shared` contains validation, response formatting, and C FFI hooks.
+
 mod auth;
 mod context;
 mod resources;

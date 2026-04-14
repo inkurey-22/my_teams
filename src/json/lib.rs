@@ -1,25 +1,56 @@
+//! JSON parsing and serialization helpers for the myteams workspace.
+//!
+//! This crate provides a small JSON value model plus file and string helpers
+//! that are used to load fixture data and persist the server state.
+//! The API intentionally stays small and dependency-free so it can be
+//! documented and reused directly with `cargo doc`.
+//!
+//! # Example
+//!
+//! ```rust
+//! use myteams_json::{parse_json_object, stringify_json_value, JsonValue};
+//!
+//! let value = JsonValue::String(String::from("hello"));
+//! assert_eq!(stringify_json_value(&value), r#"\"hello\""#);
+//!
+//! let object = parse_json_object(r#"{"name":"myteams"}"#).unwrap();
+//! assert!(object.contains_key("name"));
+//! ```
+
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::path::Path;
 
+/// A JSON object represented as a deterministic key-ordered map.
 pub type JsonObject = BTreeMap<String, JsonValue>;
 
+/// A JSON value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
+    /// The `null` literal.
     Null,
+    /// A boolean value.
     Bool(bool),
+    /// A numeric value stored as `f64`.
     Number(f64),
+    /// A UTF-8 string.
     String(String),
+    /// An ordered collection of JSON values.
     Array(Vec<JsonValue>),
+    /// A JSON object with string keys.
     Object(JsonObject),
 }
 
+/// Errors returned while reading, parsing, or writing JSON data.
 #[derive(Debug)]
 pub enum JsonIoError {
+    /// A file system operation failed.
     Io(io::Error),
+    /// Parsing failed at the recorded byte position.
     Parse { message: String, position: usize },
+    /// The top-level value was not the expected JSON type.
     InvalidRootType(&'static str),
 }
 
@@ -43,6 +74,7 @@ impl From<io::Error> for JsonIoError {
     }
 }
 
+/// Read JSON from disk and parse it into a [`JsonValue`].
 pub fn read_json_value<P>(path: P) -> Result<JsonValue, JsonIoError>
 where
     P: AsRef<Path>,
@@ -51,6 +83,7 @@ where
     parse_json_value(&content)
 }
 
+/// Serialize a [`JsonValue`] and write it to disk.
 pub fn write_json_value<P>(path: P, value: &JsonValue) -> Result<(), JsonIoError>
 where
     P: AsRef<Path>,
@@ -58,6 +91,7 @@ where
     fs::write(path, stringify_json_value(value)).map_err(JsonIoError::from)
 }
 
+/// Read a JSON file as raw text without parsing it.
 pub fn read_json_text<P>(path: P) -> Result<String, JsonIoError>
 where
     P: AsRef<Path>,
@@ -65,6 +99,7 @@ where
     fs::read_to_string(path).map_err(JsonIoError::from)
 }
 
+/// Write raw JSON text to disk without validating it first.
 pub fn write_json_text<P>(path: P, json: &str) -> Result<(), JsonIoError>
 where
     P: AsRef<Path>,
@@ -72,6 +107,7 @@ where
     fs::write(path, json).map_err(JsonIoError::from)
 }
 
+/// Parse a JSON string into a [`JsonValue`].
 pub fn parse_json_value(json: &str) -> Result<JsonValue, JsonIoError> {
     let mut parser = Parser::new(json);
     let value = parser.parse_value()?;
@@ -84,6 +120,7 @@ pub fn parse_json_value(json: &str) -> Result<JsonValue, JsonIoError> {
     }
 }
 
+/// Parse a JSON string and require the root value to be an object.
 pub fn parse_json_object(json: &str) -> Result<JsonObject, JsonIoError> {
     match parse_json_value(json)? {
         JsonValue::Object(object) => Ok(object),
@@ -93,16 +130,19 @@ pub fn parse_json_object(json: &str) -> Result<JsonObject, JsonIoError> {
     }
 }
 
+/// Convert a [`JsonValue`] into compact JSON text.
 pub fn stringify_json_value(value: &JsonValue) -> String {
     let mut out = String::new();
     write_json_value_to_string(value, &mut out);
     out
 }
 
+/// Convert a JSON object into compact JSON text.
 pub fn stringify_json_object(object: &JsonObject) -> Result<String, JsonIoError> {
     Ok(stringify_json_value(&JsonValue::Object(object.clone())))
 }
 
+/// Write a [`JsonValue`] into an output buffer as compact JSON.
 fn write_json_value_to_string(value: &JsonValue, out: &mut String) {
     match value {
         JsonValue::Null => out.push_str("null"),
@@ -146,6 +186,7 @@ fn write_json_value_to_string(value: &JsonValue, out: &mut String) {
     }
 }
 
+/// Write a JSON string literal with the required escape sequences.
 fn write_json_string(input: &str, out: &mut String) {
     out.push('"');
     for ch in input.chars() {
@@ -167,12 +208,14 @@ fn write_json_string(input: &str, out: &mut String) {
     out.push('"');
 }
 
+/// A small hand-written JSON parser over a byte slice.
 struct Parser<'a> {
     src: &'a [u8],
     idx: usize,
 }
 
 impl<'a> Parser<'a> {
+    /// Create a parser for the provided JSON input.
     fn new(input: &'a str) -> Self {
         Self {
             src: input.as_bytes(),
@@ -180,20 +223,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Return `true` when the input cursor has reached the end of the source.
     fn is_eof(&self) -> bool {
         self.idx >= self.src.len()
     }
 
+    /// Peek at the next byte without advancing the cursor.
     fn peek(&self) -> Option<u8> {
         self.src.get(self.idx).copied()
     }
 
+    /// Consume and return the next byte.
     fn next(&mut self) -> Option<u8> {
         let b = self.peek()?;
         self.idx += 1;
         Some(b)
     }
 
+    /// Skip ASCII whitespace characters.
     fn skip_ws(&mut self) {
         while let Some(b) = self.peek() {
             if matches!(b, b' ' | b'\n' | b'\r' | b'\t') {
@@ -204,6 +251,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Build a parse error at the current cursor position.
     fn error(&self, message: &str) -> JsonIoError {
         JsonIoError::Parse {
             message: message.to_string(),
@@ -211,6 +259,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse any valid JSON value.
     fn parse_value(&mut self) -> Result<JsonValue, JsonIoError> {
         self.skip_ws();
         match self.peek() {
@@ -225,11 +274,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse the `null` literal.
     fn parse_null(&mut self) -> Result<JsonValue, JsonIoError> {
         self.expect_bytes(b"null")?;
         Ok(JsonValue::Null)
     }
 
+    /// Parse the `true` or `false` literal.
     fn parse_bool(&mut self) -> Result<JsonValue, JsonIoError> {
         if self.match_bytes(b"true") {
             Ok(JsonValue::Bool(true))
@@ -240,6 +291,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a JSON number into an `f64`.
     fn parse_number(&mut self) -> Result<JsonValue, JsonIoError> {
         let start = self.idx;
 
@@ -291,6 +343,7 @@ impl<'a> Parser<'a> {
         Ok(JsonValue::Number(n))
     }
 
+    /// Parse a JSON string, including escape sequences and UTF-8 bytes.
     fn parse_string(&mut self) -> Result<String, JsonIoError> {
         if self.next() != Some(b'"') {
             return Err(self.error("expected opening quote for string"));
@@ -339,6 +392,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Decode the next UTF-8 code point after reading the first byte.
     fn decode_next_utf8(&mut self, first: u8) -> Result<char, JsonIoError> {
         let width = utf8_char_width(first);
         if width == 0 {
@@ -362,6 +416,7 @@ impl<'a> Parser<'a> {
             .ok_or_else(|| self.error("empty utf-8 sequence"))
     }
 
+    /// Parse four hexadecimal digits from a `\uXXXX` escape.
     fn parse_u16_hex(&mut self) -> Result<u16, JsonIoError> {
         let mut value: u16 = 0;
         for _ in 0..4 {
@@ -379,6 +434,7 @@ impl<'a> Parser<'a> {
         Ok(value)
     }
 
+    /// Parse a JSON array.
     fn parse_array(&mut self) -> Result<JsonValue, JsonIoError> {
         self.expect_byte(b'[')?;
         self.skip_ws();
@@ -403,6 +459,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse a JSON object.
     fn parse_object(&mut self) -> Result<JsonValue, JsonIoError> {
         self.expect_byte(b'{')?;
         self.skip_ws();
@@ -433,6 +490,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Consume one byte and require it to match the expected value.
     fn expect_byte(&mut self, expected: u8) -> Result<(), JsonIoError> {
         match self.next() {
             Some(b) if b == expected => Ok(()),
@@ -440,6 +498,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Consume a fixed byte sequence and require an exact match.
     fn expect_bytes(&mut self, expected: &[u8]) -> Result<(), JsonIoError> {
         if self.match_bytes(expected) {
             Ok(())
@@ -448,6 +507,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Check whether the upcoming bytes match a literal and advance on success.
     fn match_bytes(&mut self, expected: &[u8]) -> bool {
         if self.src.len() < self.idx + expected.len() {
             return false;
@@ -461,6 +521,7 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// Return the byte width of a UTF-8 code point from its leading byte.
 fn utf8_char_width(first: u8) -> usize {
     match first {
         0x00..=0x7F => 1,

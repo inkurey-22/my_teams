@@ -29,11 +29,13 @@ fn tokenize_command(line: &str) -> Vec<String> {
     tokens
 }
 
+/// Write a request line to the server socket.
 pub fn write_request_line(stream: &mut TcpStream, line: &str) -> io::Result<()> {
     let payload = format!("{}\r\n", line);
     stream.write_all(payload.as_bytes())
 }
 
+/// Parse one command line and route it through the client registry.
 pub fn dispatch_line(
     state: &mut SessionState,
     commands: &CommandMap,

@@ -1,12 +1,17 @@
 use std::io::{self, ErrorKind, Read, Write};
 use std::net::TcpStream;
 
+/// Result of a non-blocking read attempt from a client socket.
 pub enum ReadLinesResult {
+    /// The peer closed the connection.
     Disconnected,
+    /// No data was ready to be read.
     WouldBlock,
+    /// One or more complete lines were read.
     Lines(Vec<String>),
 }
 
+/// Write a payload without failing on `WouldBlock`.
 pub fn write_nonblocking(stream: &mut TcpStream, payload: &str) -> io::Result<()> {
     match stream.write_all(payload.as_bytes()) {
         Ok(_) => Ok(()),
@@ -15,6 +20,7 @@ pub fn write_nonblocking(stream: &mut TcpStream, payload: &str) -> io::Result<()
     }
 }
 
+/// Read as many complete newline-delimited lines as are currently available.
 pub fn read_lines_nonblocking(
     stream: &mut TcpStream,
     input_buffer: &mut String,

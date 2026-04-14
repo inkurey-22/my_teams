@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// In-memory view of users and their online state.
 #[derive(Default)]
 pub struct UserStore {
     by_name: HashMap<String, String>,

@@ -1,5 +1,6 @@
 use std::io;
 
+/// Server-side info notifications understood by the client.
 pub enum InfoMessage {
     NewMessage {
         sender_uuid: String,
@@ -28,26 +29,32 @@ pub enum InfoMessage {
     },
 }
 
+/// Escape a request argument for the wire protocol.
 fn quote_net_argument(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Build a `LOGIN` request line.
 pub fn build_login_request(user_name: &str) -> String {
     format!("C100 LOGIN \"{}\"\r\n", quote_net_argument(user_name))
 }
 
+/// Build a `LOGOUT` request line.
 pub fn build_logout_request() -> String {
     "C100 LOGOUT\r\n".to_string()
 }
 
+/// Build a `USERS` request line.
 pub fn build_users_request() -> String {
     "C100 USERS\r\n".to_string()
 }
 
+/// Build a `USER` request line.
 pub fn build_user_request(user_uuid: &str) -> String {
     format!("C100 USER \"{}\"\r\n", quote_net_argument(user_uuid))
 }
 
+/// Build a `SEND` request line.
 pub fn build_send_request(user_uuid: &str, message_body: &str) -> String {
     format!(
         "C100 SEND \"{}\" \"{}\"\r\n",
@@ -56,14 +63,17 @@ pub fn build_send_request(user_uuid: &str, message_body: &str) -> String {
     )
 }
 
+/// Build a `MESSAGES` request line.
 pub fn build_messages_request(user_uuid: &str) -> String {
     format!("C100 MESSAGES \"{}\"\r\n", quote_net_argument(user_uuid))
 }
 
+/// Build a `SUBSCRIBE` request line.
 pub fn build_subscribe_request(team_uuid: &str) -> String {
     format!("C100 SUBSCRIBE \"{}\"\r\n", quote_net_argument(team_uuid))
 }
 
+/// Build a `SUBSCRIBED` request line.
 pub fn build_subscribed_request(team_uuid: Option<&str>) -> String {
     match team_uuid {
         Some(team_uuid) => format!("C100 SUBSCRIBED \"{}\"\r\n", quote_net_argument(team_uuid)),
@@ -71,10 +81,12 @@ pub fn build_subscribed_request(team_uuid: Option<&str>) -> String {
     }
 }
 
+/// Build a `UNSUBSCRIBE` request line.
 pub fn build_unsubscribe_request(team_uuid: &str) -> String {
     format!("C100 UNSUBSCRIBE \"{}\"\r\n", quote_net_argument(team_uuid))
 }
 
+/// Build a `USE` request line.
 pub fn build_use_request(args: &[String]) -> String {
     if args.is_empty() {
         return "C100 USE\r\n".to_string();
@@ -89,6 +101,7 @@ pub fn build_use_request(args: &[String]) -> String {
     format!("C100 USE {}\r\n", quoted_args)
 }
 
+/// Build a `CREATE_TEAM` request line.
 pub fn build_create_team_request(team_name: &str, team_description: &str) -> String {
     format!(
         "C100 CREATE_TEAM \"{}\" \"{}\"\r\n",
@@ -97,6 +110,7 @@ pub fn build_create_team_request(team_name: &str, team_description: &str) -> Str
     )
 }
 
+/// Build a `CREATE_CHAN` request line.
 pub fn build_create_channel_request(channel_name: &str, channel_description: &str) -> String {
     format!(
         "C100 CREATE_CHAN \"{}\" \"{}\"\r\n",
@@ -105,6 +119,7 @@ pub fn build_create_channel_request(channel_name: &str, channel_description: &st
     )
 }
 
+/// Build a `CREATE_THREAD` request line.
 pub fn build_create_thread_request(thread_title: &str, thread_body: &str) -> String {
     format!(
         "C100 CREATE_THREAD \"{}\" \"{}\"\r\n",
@@ -113,6 +128,7 @@ pub fn build_create_thread_request(thread_title: &str, thread_body: &str) -> Str
     )
 }
 
+/// Build a `CREATE_REP` request line.
 pub fn build_create_reply_request(comment_body: &str) -> String {
     format!(
         "C100 CREATE_REP \"{}\"\r\n",
@@ -120,38 +136,47 @@ pub fn build_create_reply_request(comment_body: &str) -> String {
     )
 }
 
+/// Build a `LIST_TEAMS` request line.
 pub fn build_list_teams_request() -> String {
     "C100 LIST_TEAMS\r\n".to_string()
 }
 
+/// Build a `LIST_CHANS` request line.
 pub fn build_list_channels_request() -> String {
     "C100 LIST_CHANS\r\n".to_string()
 }
 
+/// Build a `LIST_THREADS` request line.
 pub fn build_list_threads_request() -> String {
     "C100 LIST_THREADS\r\n".to_string()
 }
 
+/// Build a `LIST_REPS` request line.
 pub fn build_list_replies_request() -> String {
     "C100 LIST_REPS\r\n".to_string()
 }
 
+/// Build a `INFO_USER` request line.
 pub fn build_info_user_request() -> String {
     "C100 INFO_USER\r\n".to_string()
 }
 
+/// Build a `INFO_TEAM` request line.
 pub fn build_info_team_request() -> String {
     "C100 INFO_TEAM\r\n".to_string()
 }
 
+/// Build a `INFO_CHAN` request line.
 pub fn build_info_channel_request() -> String {
     "C100 INFO_CHAN\r\n".to_string()
 }
 
+/// Build a `INFO_THREAD` request line.
 pub fn build_info_thread_request() -> String {
     "C100 INFO_THREAD\r\n".to_string()
 }
 
+/// Extract the numeric response code from a server response line.
 pub fn parse_response_code(response: &str) -> io::Result<u16> {
     let header = response
         .split_whitespace()
@@ -173,6 +198,7 @@ pub fn parse_response_code(response: &str) -> io::Result<u16> {
     })
 }
 
+/// Extract the first token from a response body as a UUID.
 pub fn extract_uuid_from_body(response: &str) -> io::Result<String> {
     let tokens = parse_response_tokens(response)?;
     let Some(uuid) = tokens.first() else {
@@ -228,6 +254,7 @@ fn tokenize_body(input: &str) -> io::Result<Vec<String>> {
     Ok(tokens)
 }
 
+/// Tokenize a server response body while preserving quoted payloads.
 pub fn parse_response_tokens(response: &str) -> io::Result<Vec<String>> {
     let body = response
         .split_once(' ')
@@ -241,6 +268,7 @@ pub fn parse_response_tokens(response: &str) -> io::Result<Vec<String>> {
     tokenize_body(body)
 }
 
+/// Parse an asynchronous info message emitted by the server.
 pub fn parse_info_message(line: &str) -> io::Result<Option<InfoMessage>> {
     let mut parts = line.trim().splitn(2, char::is_whitespace);
     let header = parts.next().unwrap_or("");
