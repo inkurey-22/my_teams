@@ -14,16 +14,17 @@ pub(super) fn handle_subscribe_response(
     response: &str,
     team_uuid: String,
 ) -> io::Result<()> {
-    if code == 401 {
-        handle_unauthorized();
-        return Ok(());
-    }
-    if code == 404 {
-        handle_unknown_team(&team_uuid)?;
-        return Ok(());
-    }
-    if code != 200 {
-        return Err(invalid_response(response));
+    match code {
+        401 => {
+            handle_unauthorized();
+            return Ok(());
+        }
+        404 => {
+            handle_unknown_team(&team_uuid)?;
+            return Ok(());
+        }
+        200 => {}
+        _ => return Err(invalid_response(response)),
     }
 
     let tokens = parse_response_tokens(response)?;
@@ -45,18 +46,20 @@ pub(super) fn handle_subscribed_response(
     response: &str,
     team_uuid: Option<String>,
 ) -> io::Result<()> {
-    if code == 401 {
-        handle_unauthorized();
-        return Ok(());
-    }
-    if code == 404 {
-        if let Some(team_uuid) = team_uuid {
-            handle_unknown_team(&team_uuid)?;
+    match code {
+        401 => {
+            handle_unauthorized();
             return Ok(());
         }
-    }
-    if code != 200 {
-        return Err(invalid_response(response));
+        404 => {
+            if let Some(team_uuid) = team_uuid.as_deref() {
+                handle_unknown_team(team_uuid)?;
+                return Ok(());
+            }
+            return Err(invalid_payload("invalid SUBSCRIBED response payload"));
+        }
+        200 => {}
+        _ => return Err(invalid_response(response)),
     }
 
     let tokens = parse_response_tokens(response)?;
@@ -107,16 +110,17 @@ pub(super) fn handle_unsubscribe_response(
     response: &str,
     team_uuid: String,
 ) -> io::Result<()> {
-    if code == 401 {
-        handle_unauthorized();
-        return Ok(());
-    }
-    if code == 404 {
-        handle_unknown_team(&team_uuid)?;
-        return Ok(());
-    }
-    if code != 200 {
-        return Err(invalid_response(response));
+    match code {
+        401 => {
+            handle_unauthorized();
+            return Ok(());
+        }
+        404 => {
+            handle_unknown_team(&team_uuid)?;
+            return Ok(());
+        }
+        200 => {}
+        _ => return Err(invalid_response(response)),
     }
 
     let tokens = parse_response_tokens(response)?;
@@ -141,24 +145,30 @@ pub(super) fn handle_use_response(
     channel_uuid: Option<String>,
     thread_uuid: Option<String>,
 ) -> io::Result<()> {
-    if code == 404 {
-        if let Some(thread_uuid) = thread_uuid.as_deref() {
-            handle_unknown_thread(thread_uuid)?;
-            return Ok(());
+    match code {
+        404 => {
+            match thread_uuid.as_deref() {
+                Some(thread_uuid) => {
+                    handle_unknown_thread(thread_uuid)?;
+                    return Ok(());
+                }
+                None => match channel_uuid.as_deref() {
+                    Some(channel_uuid) => {
+                        handle_unknown_channel(channel_uuid)?;
+                        return Ok(());
+                    }
+                    None => match team_uuid.as_deref() {
+                        Some(team_uuid) => {
+                            handle_unknown_team(team_uuid)?;
+                            return Ok(());
+                        }
+                        None => return Err(invalid_payload("invalid USE response payload")),
+                    },
+                },
+            }
         }
-        if let Some(channel_uuid) = channel_uuid.as_deref() {
-            handle_unknown_channel(channel_uuid)?;
-            return Ok(());
-        }
-        if let Some(team_uuid) = team_uuid.as_deref() {
-            handle_unknown_team(team_uuid)?;
-            return Ok(());
-        }
-
-        return Err(invalid_payload("invalid USE response payload"));
-    }
-    if code != 200 {
-        return Err(invalid_response(response));
+        200 => {}
+        _ => return Err(invalid_response(response)),
     }
 
     state.context.team_uuid = team_uuid;
