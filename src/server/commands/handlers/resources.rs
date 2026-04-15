@@ -22,6 +22,18 @@ fn team_subscriber_info_events(users: &UserStore, team_uuid: &str, payload: Stri
         .collect()
 }
 
+fn logged_user_info_events(users: &UserStore, payload: String) -> Vec<InfoEvent> {
+    users
+        .list_users()
+        .into_iter()
+        .filter(|(_, _, is_online)| *is_online)
+        .map(|(recipient_user_uuid, _, _)| InfoEvent {
+            recipient_user_uuid,
+            payload: payload.clone(),
+        })
+        .collect()
+}
+
 /// Create a team, channel, thread, or reply in the current context.
 pub fn handle_create(
     state: &mut SessionState,
@@ -63,7 +75,17 @@ pub fn handle_create(
             }
 
             call_event_team_created(&team.uuid, &team.name, user_uuid);
-            CommandOutcome::response_only(response(200, Some(&team_response(&team))))
+            let info_payload = format!(
+                "I100 NEW_TEAM {} {} {}\r\n",
+                quoted(&team.uuid),
+                quoted(&team.name),
+                quoted(&team.description)
+            );
+
+            CommandOutcome {
+                response: response(200, Some(&team_response(&team))),
+                info_events: logged_user_info_events(users, info_payload),
+            }
         }
         Ok(ResourceContext::Team { team_uuid }) => {
             if validate_arg_count(args, 2, 2).is_err()

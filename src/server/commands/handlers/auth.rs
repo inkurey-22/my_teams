@@ -9,6 +9,18 @@ use super::shared::{
     validate_arg_count, validate_max_len, MAX_BODY_LENGTH, MAX_NAME_LENGTH,
 };
 
+fn online_user_info_events(users: &UserStore, payload: String) -> Vec<InfoEvent> {
+    users
+        .list_users()
+        .into_iter()
+        .filter(|(_, _, is_online)| *is_online)
+        .map(|(recipient_user_uuid, _, _)| InfoEvent {
+            recipient_user_uuid,
+            payload: payload.clone(),
+        })
+        .collect()
+}
+
 /// Show the server command help output.
 pub fn handle_help(
     _state: &mut SessionState,
@@ -62,7 +74,16 @@ pub fn handle_login(
     state.user_uuid = Some(user_uuid.clone());
     call_event_user_logged_in(&user_uuid);
 
-    CommandOutcome::response_only(response(200, Some(&quoted(&user_uuid))))
+    let info_payload = format!(
+        "I100 USER_LOGGED_IN {} {}\r\n",
+        quoted(&user_uuid),
+        quoted(user_name)
+    );
+
+    CommandOutcome {
+        response: response(200, Some(&quoted(&user_uuid))),
+        info_events: online_user_info_events(users, info_payload),
+    }
 }
 
 /// Log the current user out.
@@ -78,8 +99,26 @@ pub fn handle_logout(
     }
 
     if let Some(user_uuid) = state.user_uuid.take() {
+        let user_name = users
+            .user_details(&user_uuid)
+            .map(|(user_name, _)| user_name)
+            .unwrap_or_default();
+
+        let info_payload = format!(
+            "I100 USER_LOGGED_OUT {} {}\r\n",
+            quoted(&user_uuid),
+            quoted(&user_name)
+        );
+
+        let info_events = online_user_info_events(users, info_payload);
+
         users.logout(&user_uuid);
         emit_user_logged_out(&user_uuid);
+
+        return CommandOutcome {
+            response: response(200, None),
+            info_events,
+        };
     }
 
     CommandOutcome::response_only(response(200, None))

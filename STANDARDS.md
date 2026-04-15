@@ -234,5 +234,7 @@ The body contains the information related to the event in the form of a string.
 ### Info message types:
 
 NET```I100 NEW_MESSAGE <SP> "[message_body]" <CRLF>``` : a new message has been sent to the user.
+NET```I100 USER_LOGGED_IN <SP> "[user_uuid]" <SP> "[user_name]" <CRLF>``` : a user has logged in and every connected user should receive the notification.
+NET```I100 USER_LOGGED_OUT <SP> "[user_uuid]" <SP> "[user_name]" <CRLF>``` : a user has logged out and every connected user should receive the notification.
 
 ///ECT

@@ -446,8 +446,15 @@ test_messaging_malformed_user_identifiers() {
 }
 
 test_team_and_subscription_flow() {
+  local c1_before_team c2_before_team
+
+  c1_before_team="$(line_count "${LOG_C1}")"
+  c2_before_team="$(line_count "${LOG_C2}")"
   TEAM_UUID="$(send_expect_and_capture "${FD1}" "${LOG_C1}" "/create \"${TEAM_NAME}\" \"team description\"" 'R200 .*TEAM' '[0-9a-fA-F-]{36}')" || return 1
   [[ -n "${TEAM_UUID}" ]] || return 1
+
+  expect_async_in_log "${LOG_C1}" "${c1_before_team}" "I100 NEW_TEAM .*${TEAM_UUID}.*${TEAM_NAME}" || return 1
+  expect_async_in_log "${LOG_C2}" "${c2_before_team}" "I100 NEW_TEAM .*${TEAM_UUID}.*${TEAM_NAME}" || return 1
 
   send_and_expect "${FD1}" "${LOG_C1}" "/subscribe \"${TEAM_UUID}\"" "R200 .*SUBSCRIBED.*${TEAM_UUID}" || return 1
   send_and_expect "${FD2}" "${LOG_C2}" "/subscribe \"${TEAM_UUID}\"" "R200 .*SUBSCRIBED.*${TEAM_UUID}" || return 1
