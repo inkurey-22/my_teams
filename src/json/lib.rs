@@ -11,7 +11,7 @@
 //! use myteams_json::{parse_json_object, stringify_json_value, JsonValue};
 //!
 //! let value = JsonValue::String(String::from("hello"));
-//! assert_eq!(stringify_json_value(&value), r#"\"hello\""#);
+//! assert_eq!(stringify_json_value(&value), r#""hello""#);
 //!
 //! let object = parse_json_object(r#"{"name":"myteams"}"#).unwrap();
 //! assert!(object.contains_key("name"));
