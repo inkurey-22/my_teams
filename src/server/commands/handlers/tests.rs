@@ -72,8 +72,14 @@ fn login_command_broadcasts_to_all_online_users() {
         outcome.info_events[0].payload,
         "I100 USER_LOGGED_IN \"uuid-alice\" \"alice\"\r\n"
     );
-    assert_eq!(outcome.info_events[0].payload, outcome.info_events[1].payload);
-    assert_eq!(outcome.info_events[1].payload, outcome.info_events[2].payload);
+    assert_eq!(
+        outcome.info_events[0].payload,
+        outcome.info_events[1].payload
+    );
+    assert_eq!(
+        outcome.info_events[1].payload,
+        outcome.info_events[2].payload
+    );
     assert_eq!(state.user_uuid.as_deref(), Some("uuid-alice"));
 }
 
@@ -112,8 +118,14 @@ fn logout_command_broadcasts_to_all_online_users() {
         outcome.info_events[0].payload,
         "I100 USER_LOGGED_OUT \"uuid-alice\" \"alice\"\r\n"
     );
-    assert_eq!(outcome.info_events[0].payload, outcome.info_events[1].payload);
-    assert_eq!(outcome.info_events[1].payload, outcome.info_events[2].payload);
+    assert_eq!(
+        outcome.info_events[0].payload,
+        outcome.info_events[1].payload
+    );
+    assert_eq!(
+        outcome.info_events[1].payload,
+        outcome.info_events[2].payload
+    );
     assert!(state.user_uuid.is_none());
 }
 
@@ -689,8 +701,13 @@ fn create_channel_notifies_all_team_subscribers() {
     assert_eq!(outcome.info_events.len(), 2);
     assert_eq!(outcome.info_events[0].recipient_user_uuid, "uuid-alice");
     assert_eq!(outcome.info_events[1].recipient_user_uuid, "uuid-bob");
-    assert!(outcome.info_events[0].payload.starts_with("I100 NEW_CHANNEL \"team-a\" "));
-    assert_eq!(outcome.info_events[0].payload, outcome.info_events[1].payload);
+    assert!(outcome.info_events[0]
+        .payload
+        .starts_with("I100 NEW_CHANNEL \"team-a\" "));
+    assert_eq!(
+        outcome.info_events[0].payload,
+        outcome.info_events[1].payload
+    );
 }
 
 #[test]

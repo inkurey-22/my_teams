@@ -449,8 +449,9 @@ mod tests {
 
     #[test]
     fn parses_team_creation_info_message() {
-        let parsed = parse_info_message("I100 NEW_TEAM \"uuid-team\" \"team name\" \"team description\"")
-            .expect("team creation info should parse");
+        let parsed =
+            parse_info_message("I100 NEW_TEAM \"uuid-team\" \"team name\" \"team description\"")
+                .expect("team creation info should parse");
 
         assert!(matches!(
             parsed,

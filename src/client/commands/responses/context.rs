@@ -152,27 +152,25 @@ pub(super) fn handle_use_response(
     thread_uuid: Option<String>,
 ) -> io::Result<()> {
     match code {
-        404 => {
-            match thread_uuid.as_deref() {
-                Some(thread_uuid) => {
-                    handle_unknown_thread(thread_uuid)?;
+        404 => match thread_uuid.as_deref() {
+            Some(thread_uuid) => {
+                handle_unknown_thread(thread_uuid)?;
+                return Ok(());
+            }
+            None => match channel_uuid.as_deref() {
+                Some(channel_uuid) => {
+                    handle_unknown_channel(channel_uuid)?;
                     return Ok(());
                 }
-                None => match channel_uuid.as_deref() {
-                    Some(channel_uuid) => {
-                        handle_unknown_channel(channel_uuid)?;
+                None => match team_uuid.as_deref() {
+                    Some(team_uuid) => {
+                        handle_unknown_team(team_uuid)?;
                         return Ok(());
                     }
-                    None => match team_uuid.as_deref() {
-                        Some(team_uuid) => {
-                            handle_unknown_team(team_uuid)?;
-                            return Ok(());
-                        }
-                        None => return Err(invalid_payload("invalid USE response payload")),
-                    },
+                    None => return Err(invalid_payload("invalid USE response payload")),
                 },
-            }
-        }
+            },
+        },
         200 => {}
         _ => return Err(invalid_response(response)),
     }

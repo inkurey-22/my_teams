@@ -11,7 +11,11 @@ use super::shared::{
     ResourceContext, MAX_BODY_LENGTH, MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH,
 };
 
-fn team_subscriber_info_events(users: &UserStore, team_uuid: &str, payload: String) -> Vec<InfoEvent> {
+fn team_subscriber_info_events(
+    users: &UserStore,
+    team_uuid: &str,
+    payload: String,
+) -> Vec<InfoEvent> {
     users
         .subscribed_user_ids(team_uuid)
         .into_iter()

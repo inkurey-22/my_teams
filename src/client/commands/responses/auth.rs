@@ -52,7 +52,8 @@ pub(super) fn handle_logout_response(
         let user_name_cstr = cstring(&user_name, "user name")?;
 
         unsafe {
-            let _ = libcli::client_event_logged_out(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
+            let _ =
+                libcli::client_event_logged_out(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
         }
     }
 

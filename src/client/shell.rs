@@ -1,6 +1,6 @@
 use crate::commands::{
-    command_registry, dispatch_line, handle_response_line, parse_info_message, InfoMessage,
-    write_request_line, SessionState,
+    command_registry, dispatch_line, handle_response_line, parse_info_message, write_request_line,
+    InfoMessage, SessionState,
 };
 use crate::libcli;
 use crate::poll::{wait as poll_wait, PollFd, POLLERR, POLLHUP, POLLIN, POLLNVAL};
