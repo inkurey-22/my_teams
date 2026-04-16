@@ -27,3 +27,36 @@ pub fn parse_port_arg(args: &[String]) -> Option<(String, u16)> {
 
     Some((port_arg, port))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_port_arg_with_valid_port() {
+        let args = vec!["server".to_string(), "8080".to_string()];
+        let result = parse_port_arg(&args);
+        assert_eq!(result, Some(("8080".to_string(), 8080)));
+    }
+
+    #[test]
+    fn parse_port_arg_with_port_1() {
+        let args = vec!["server".to_string(), "1".to_string()];
+        let result = parse_port_arg(&args);
+        assert_eq!(result, Some(("1".to_string(), 1)));
+    }
+
+    #[test]
+    fn parse_port_arg_with_max_port() {
+        let args = vec!["server".to_string(), "65535".to_string()];
+        let result = parse_port_arg(&args);
+        assert_eq!(result, Some(("65535".to_string(), 65535)));
+    }
+
+    #[test]
+    fn parse_port_arg_with_help_flag() {
+        let args = vec!["server".to_string(), "--help".to_string()];
+        let result = parse_port_arg(&args);
+        assert_eq!(result, None);
+    }
+}

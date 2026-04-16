@@ -214,3 +214,75 @@ pub fn command_registry() -> CommandMap {
         ),
     ])
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_registry_creates_non_empty_map() {
+        let registry = command_registry();
+        assert!(!registry.is_empty());
+    }
+
+    #[test]
+    fn command_registry_contains_help_command() {
+        let registry = command_registry();
+        assert!(registry.contains_key("HELP"));
+    }
+
+    #[test]
+    fn command_registry_contains_login_command() {
+        let registry = command_registry();
+        assert!(registry.contains_key("LOGIN"));
+    }
+
+    #[test]
+    fn command_registry_contains_users_command() {
+        let registry = command_registry();
+        assert!(registry.contains_key("USERS"));
+    }
+
+    #[test]
+    fn command_registry_contains_send_command() {
+        let registry = command_registry();
+        assert!(registry.contains_key("SEND"));
+    }
+
+    #[test]
+    fn command_registry_contains_logout_command() {
+        let registry = command_registry();
+        assert!(registry.contains_key("LOGOUT"));
+    }
+
+    #[test]
+    fn command_registry_contains_subscribe_command() {
+        let registry = command_registry();
+        assert!(registry.contains_key("SUBSCRIBE"));
+    }
+
+    #[test]
+    fn command_registry_all_have_descriptions() {
+        let registry = command_registry();
+        for (name, def) in registry.iter() {
+            assert!(
+                !def.description.is_empty(),
+                "Command {} missing description",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn command_registry_all_have_usage() {
+        let registry = command_registry();
+        for (name, def) in registry.iter() {
+            assert!(
+                !def.usage.is_empty(),
+                "Command {} missing usage",
+                name
+            );
+        }
+    }
+}
+

@@ -70,3 +70,82 @@ pub struct CommandDefinition {
     /// Function that executes the command.
     pub handler: CommandHandler,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_outcome_response_only_has_no_events() {
+        let outcome = CommandOutcome::response_only("R200 OK".to_string());
+        assert_eq!(outcome.response, "R200 OK");
+        assert_eq!(outcome.info_events.len(), 0);
+    }
+
+    #[test]
+    fn command_outcome_with_info_events() {
+        let info_event = InfoEvent {
+            recipient_user_uuid: "user-123".to_string(),
+            payload: "test event".to_string(),
+        };
+        let mut outcome = CommandOutcome::response_only("R200".to_string());
+        outcome.info_events.push(info_event);
+
+        assert_eq!(outcome.response, "R200");
+        assert_eq!(outcome.info_events.len(), 1);
+        assert_eq!(
+            outcome.info_events[0].recipient_user_uuid,
+            "user-123"
+        );
+    }
+
+    #[test]
+    fn command_context_default_is_empty() {
+        let ctx = CommandContext::default();
+        assert!(ctx.team_uuid.is_none());
+        assert!(ctx.channel_uuid.is_none());
+        assert!(ctx.thread_uuid.is_none());
+    }
+
+    #[test]
+    fn session_state_default_is_empty() {
+        let state = SessionState::default();
+        assert!(state.user_uuid.is_none());
+        assert!(state.context.team_uuid.is_none());
+    }
+
+    #[test]
+    fn session_state_can_set_user_uuid() {
+        let mut state = SessionState::default();
+        state.user_uuid = Some("user-alice".to_string());
+        assert_eq!(state.user_uuid.as_ref().unwrap(), "user-alice");
+    }
+
+    #[test]
+    fn session_state_can_set_team_context() {
+        let mut state = SessionState::default();
+        state.context.team_uuid = Some("team-123".to_string());
+        state.context.channel_uuid = Some("channel-456".to_string());
+        assert_eq!(
+            state.context.team_uuid.as_ref().unwrap(),
+            "team-123"
+        );
+        assert_eq!(
+            state.context.channel_uuid.as_ref().unwrap(),
+            "channel-456"
+        );
+    }
+
+    #[test]
+    fn command_definition_stores_metadata() {
+        let def = CommandDefinition {
+            usage: "TEST [arg]",
+            description: "test command",
+            handler: |_, _, _, _, _| CommandOutcome::response_only("R200".to_string()),
+        };
+
+        assert_eq!(def.usage, "TEST [arg]");
+        assert_eq!(def.description, "test command");
+    }
+}
+
