@@ -1,6 +1,5 @@
 //! Client response handlers for login, user, and message commands.
 
-use std::ffi::CString;
 use std::io;
 
 use crate::commands::protocol::{extract_uuid_from_body, parse_response_tokens};
@@ -31,15 +30,6 @@ pub(super) fn handle_login_response(
     state.user_name = Some(user_name.clone());
     state.user_uuid = Some(user_uuid.clone());
 
-    let user_uuid_cstr =
-        CString::new(user_uuid).map_err(|_| invalid_payload("user UUID contains null byte"))?;
-    let user_name_cstr = CString::new(user_name)
-        .map_err(|_| invalid_payload("user name contains an invalid NUL byte"))?;
-
-    unsafe {
-        let _ = libcli::client_event_logged_in(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
-    }
-
     Ok(())
 }
 
@@ -59,17 +49,7 @@ pub(super) fn handle_logout_response(
 
     let user_uuid = state.user_uuid.take();
     let user_name = state.user_name.take();
-    if let (Some(user_uuid), Some(user_name)) = (user_uuid, user_name) {
-        let user_uuid_cstr =
-            CString::new(user_uuid).map_err(|_| invalid_payload("user UUID contains null byte"))?;
-        let user_name_cstr = CString::new(user_name)
-            .map_err(|_| invalid_payload("user name contains an invalid NUL byte"))?;
-
-        unsafe {
-            let _ =
-                libcli::client_event_logged_out(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
-        }
-    }
+    let _ = (user_uuid, user_name);
 
     Ok(())
 }

@@ -39,6 +39,65 @@ fn handle_info_message(line: &str) {
                 );
             }
         }
+        Some(InfoMessage::NewTeam {
+            team_uuid,
+            team_name,
+            team_description,
+        }) => {
+            let Ok(team_uuid_cstr) = CString::new(team_uuid) else {
+                return;
+            };
+            let Ok(team_name_cstr) = CString::new(team_name) else {
+                return;
+            };
+            let Ok(team_description_cstr) = CString::new(team_description) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_team_created(
+                    team_uuid_cstr.as_ptr(),
+                    team_name_cstr.as_ptr(),
+                    team_description_cstr.as_ptr(),
+                );
+            }
+        }
+        Some(InfoMessage::UserLoggedIn {
+            user_uuid,
+            user_name,
+        }) => {
+            let Ok(user_uuid_cstr) = CString::new(user_uuid) else {
+                return;
+            };
+            let Ok(user_name_cstr) = CString::new(user_name) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_logged_in(
+                    user_uuid_cstr.as_ptr(),
+                    user_name_cstr.as_ptr(),
+                );
+            }
+        }
+        Some(InfoMessage::UserLoggedOut {
+            user_uuid,
+            user_name,
+        }) => {
+            let Ok(user_uuid_cstr) = CString::new(user_uuid) else {
+                return;
+            };
+            let Ok(user_name_cstr) = CString::new(user_name) else {
+                return;
+            };
+
+            unsafe {
+                let _ = libcli::client_event_logged_out(
+                    user_uuid_cstr.as_ptr(),
+                    user_name_cstr.as_ptr(),
+                );
+            }
+        }
         Some(InfoMessage::NewChannel {
             team_uuid,
             channel_uuid,

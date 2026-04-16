@@ -42,6 +42,82 @@ impl Drop for TestStorage {
 }
 
 #[test]
+fn login_command_broadcasts_to_all_online_users() {
+    let mut state = SessionState::default();
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![
+        ("alice".to_string(), "uuid-alice".to_string()),
+        ("bob".to_string(), "uuid-bob".to_string()),
+        ("carol".to_string(), "uuid-carol".to_string()),
+    ]);
+    let mut test_storage = TestStorage::new();
+
+    let _ = users.login("bob");
+    let _ = users.login("carol");
+
+    let outcome = handle_login(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &["alice".to_string()],
+    );
+
+    assert_eq!(outcome.response, "R200 \"uuid-alice\"\r\n");
+    assert_eq!(outcome.info_events.len(), 3);
+    assert_eq!(outcome.info_events[0].recipient_user_uuid, "uuid-alice");
+    assert_eq!(outcome.info_events[1].recipient_user_uuid, "uuid-bob");
+    assert_eq!(outcome.info_events[2].recipient_user_uuid, "uuid-carol");
+    assert_eq!(
+        outcome.info_events[0].payload,
+        "I100 USER_LOGGED_IN \"uuid-alice\" \"alice\"\r\n"
+    );
+    assert_eq!(outcome.info_events[0].payload, outcome.info_events[1].payload);
+    assert_eq!(outcome.info_events[1].payload, outcome.info_events[2].payload);
+    assert_eq!(state.user_uuid.as_deref(), Some("uuid-alice"));
+}
+
+#[test]
+fn logout_command_broadcasts_to_all_online_users() {
+    let mut state = SessionState {
+        user_uuid: Some("uuid-alice".to_string()),
+        context: Default::default(),
+    };
+    let registry = CommandMap::new();
+    let mut users = UserStore::from_pairs(vec![
+        ("alice".to_string(), "uuid-alice".to_string()),
+        ("bob".to_string(), "uuid-bob".to_string()),
+        ("carol".to_string(), "uuid-carol".to_string()),
+    ]);
+    let mut test_storage = TestStorage::new();
+
+    let _ = users.login("alice");
+    let _ = users.login("bob");
+    let _ = users.login("carol");
+
+    let outcome = handle_logout(
+        &mut state,
+        &registry,
+        &mut users,
+        &mut test_storage.storage,
+        &[],
+    );
+
+    assert_eq!(outcome.response, "R200\r\n");
+    assert_eq!(outcome.info_events.len(), 3);
+    assert_eq!(outcome.info_events[0].recipient_user_uuid, "uuid-alice");
+    assert_eq!(outcome.info_events[1].recipient_user_uuid, "uuid-bob");
+    assert_eq!(outcome.info_events[2].recipient_user_uuid, "uuid-carol");
+    assert_eq!(
+        outcome.info_events[0].payload,
+        "I100 USER_LOGGED_OUT \"uuid-alice\" \"alice\"\r\n"
+    );
+    assert_eq!(outcome.info_events[0].payload, outcome.info_events[1].payload);
+    assert_eq!(outcome.info_events[1].payload, outcome.info_events[2].payload);
+    assert!(state.user_uuid.is_none());
+}
+
+#[test]
 fn users_command_lists_all_users_with_online_flags() {
     let mut state = SessionState::default();
     let registry = CommandMap::new();

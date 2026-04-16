@@ -6,6 +6,19 @@ pub enum InfoMessage {
         sender_uuid: String,
         message_body: String,
     },
+    NewTeam {
+        team_uuid: String,
+        team_name: String,
+        team_description: String,
+    },
+    UserLoggedIn {
+        user_uuid: String,
+        user_name: String,
+    },
+    UserLoggedOut {
+        user_uuid: String,
+        user_name: String,
+    },
     NewChannel {
         team_uuid: String,
         channel_uuid: String,
@@ -303,6 +316,46 @@ pub fn parse_info_message(line: &str) -> io::Result<Option<InfoMessage>> {
                 "invalid NEW_MESSAGE payload",
             ))
         }
+        "NEW_TEAM" => {
+            if tokens.len() != 4 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid NEW_TEAM payload",
+                ));
+            }
+
+            Ok(Some(InfoMessage::NewTeam {
+                team_uuid: tokens[1].clone(),
+                team_name: tokens[2].clone(),
+                team_description: tokens[3].clone(),
+            }))
+        }
+        "USER_LOGGED_IN" => {
+            if tokens.len() != 3 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid USER_LOGGED_IN payload",
+                ));
+            }
+
+            Ok(Some(InfoMessage::UserLoggedIn {
+                user_uuid: tokens[1].clone(),
+                user_name: tokens[2].clone(),
+            }))
+        }
+        "USER_LOGGED_OUT" => {
+            if tokens.len() != 3 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid USER_LOGGED_OUT payload",
+                ));
+            }
+
+            Ok(Some(InfoMessage::UserLoggedOut {
+                user_uuid: tokens[1].clone(),
+                user_name: tokens[2].clone(),
+            }))
+        }
         "NEW_CHANNEL" => {
             if tokens.len() != 5 {
                 return Err(io::Error::new(
@@ -359,5 +412,53 @@ pub fn parse_info_message(line: &str) -> io::Result<Option<InfoMessage>> {
             }))
         }
         _ => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_info_message, InfoMessage};
+
+    #[test]
+    fn parses_user_login_info_message() {
+        let parsed = parse_info_message("I100 USER_LOGGED_IN \"uuid-alice\" \"alice\"")
+            .expect("login info should parse");
+
+        assert!(matches!(
+            parsed,
+            Some(InfoMessage::UserLoggedIn {
+                user_uuid,
+                user_name,
+            }) if user_uuid == "uuid-alice" && user_name == "alice"
+        ));
+    }
+
+    #[test]
+    fn parses_user_logout_info_message() {
+        let parsed = parse_info_message("I100 USER_LOGGED_OUT \"uuid-alice\" \"alice\"")
+            .expect("logout info should parse");
+
+        assert!(matches!(
+            parsed,
+            Some(InfoMessage::UserLoggedOut {
+                user_uuid,
+                user_name,
+            }) if user_uuid == "uuid-alice" && user_name == "alice"
+        ));
+    }
+
+    #[test]
+    fn parses_team_creation_info_message() {
+        let parsed = parse_info_message("I100 NEW_TEAM \"uuid-team\" \"team name\" \"team description\"")
+            .expect("team creation info should parse");
+
+        assert!(matches!(
+            parsed,
+            Some(InfoMessage::NewTeam {
+                team_uuid,
+                team_name,
+                team_description,
+            }) if team_uuid == "uuid-team" && team_name == "team name" && team_description == "team description"
+        ));
     }
 }
