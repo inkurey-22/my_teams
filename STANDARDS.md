@@ -413,6 +413,13 @@ The server must send non-response messages to the client in the form of info mes
 | `I400` | `I400 THREAD_CREATED <SP> "[thread_uuid]" <SP> "[thread_title]" <CRLF>` | A thread was created |
 | `I500` | `I500 REPLY_CREATED <SP> "[reply_uuid]" <SP> "[comment_body]" <CRLF>` | A reply was created |
 
+### 7.2 Global Info Messages
+
+| Format | Description |
+|------|-------------|
+| `I100 USER_LOGGED_IN <SP> "[user_uuid]" <SP> "[user_name]" <CRLF>` | A user has logged in and every connected user should receive the notification. |
+| `I100 USER_LOGGED_OUT <SP> "[user_uuid]" <SP> "[user_name]" <CRLF>` | a user has logged out and every connected user should receive the notification. |
+
 ---
 
 ## 8. References
