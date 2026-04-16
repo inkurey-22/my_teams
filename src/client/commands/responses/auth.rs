@@ -47,9 +47,17 @@ pub(super) fn handle_logout_response(
         return Err(invalid_response(response));
     }
 
-    let user_uuid = state.user_uuid.take();
-    let user_name = state.user_name.take();
-    let _ = (user_uuid, user_name);
+    if let (Some(user_uuid), Some(user_name)) = (state.user_uuid.clone(), state.user_name.clone()) {
+        let user_uuid_cstr = cstring(&user_uuid, "user UUID")?;
+        let user_name_cstr = cstring(&user_name, "user name")?;
+
+        unsafe {
+            let _ = libcli::client_event_logged_out(user_uuid_cstr.as_ptr(), user_name_cstr.as_ptr());
+        }
+    }
+
+    state.user_uuid = None;
+    state.user_name = None;
 
     Ok(())
 }
