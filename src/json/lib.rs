@@ -582,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn json_file_writing() {
+    fn json_file_interaction() {
         let mut obj = create_test_json();
         let mut json = stringify_json_object(&obj).unwrap();
         let temp_dir = std::env::temp_dir();
@@ -594,5 +594,51 @@ mod tests {
         assert_eq!(obj["field number"], JsonValue::Number(-9876543210.0123));
         assert_eq!(obj["field boolean"], JsonValue::Bool(false));
         assert_eq!(obj.get("nonexistent"), None);
+    }
+
+    #[test]
+    fn json_escaped_characters() {
+        let value = JsonValue::String("wawa\nawawa\tawawawa\"wa\"\\wawa/".to_string());
+        let json = stringify_json_value(&value);
+        assert_eq!(json, r#""wawa\nawawa\tawawawa\"wa\"\\wawa/""#);
+        let parsed = parse_json_value(&json).unwrap();
+        assert_eq!(parsed, value);
+    }
+
+    #[test]
+    fn json_paths() {
+        let obj = JsonObject::from([(
+            "wa".to_string(),
+            JsonValue::Object(JsonObject::from([(
+                "wawa".to_string(),
+                JsonValue::Object(JsonObject::from([(
+                    "wawawa".to_string(),
+                    JsonValue::String("awawawa".to_string()),
+                )])),
+            )])),
+        )]);
+        if let JsonValue::Object(wa_obj) = &obj["wa"] {
+            if let JsonValue::Object(wawa_obj) = &wa_obj["wawa"] {
+                assert_eq!(
+                    &wawa_obj["wawawa"],
+                    &JsonValue::String("awawawa".to_string())
+                );
+            }
+        }
+        let json = stringify_json_object(&obj).unwrap();
+        let parsed = parse_json_object(&json).unwrap();
+        if let JsonValue::Object(wa_obj) = &parsed["wa"] {
+            if let JsonValue::Object(wawa_obj) = &wa_obj["wawa"] {
+                assert_eq!(
+                    &wawa_obj["wawawa"],
+                    &JsonValue::String("awawawa".to_string())
+                );
+            }
+        }
+        assert_eq!(obj, parsed);
+        assert_eq!(
+            stringify_json_object(&obj).unwrap(),
+            stringify_json_object(&parsed).unwrap()
+        );
     }
 }
